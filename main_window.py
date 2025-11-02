@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox, filedialog
 from tkinter import font as tkfont
 from datetime import datetime
 import pandas as pd
+from collections import defaultdict  # NOWOŚĆ: do grupowania duplikatów
 
 from employee_management import EmployeeManagement
 from db_manager import DBManager
@@ -212,15 +213,172 @@ class MainWindow(tk.Tk):
         self.main_frame = ttk.Frame(self.notebook, padding="10")
         self.notebook.add(self.main_frame, text="👥 Pracownicy")
 
+        # NOWOŚĆ: Zakładka Duplikaty
+        self.duplicates_frame = ttk.Frame(self.notebook, padding="10")
+        self.notebook.add(self.duplicates_frame, text="🔁 Duplikaty")
+
         self.create_employee_tab()
         self.refresh_employee_list()
         self.update_dashboard()
+
+        # NOWOŚĆ: Utwórz zakładkę duplikatów
+        self.create_duplicates_tab()
 
         self.main_frame.grid_rowconfigure(2, weight=1)  # lista (bez kafelka)
         self.main_frame.grid_rowconfigure(3, weight=1)  # lista (z kafelkiem)
         self.main_frame.grid_columnconfigure(0, weight=1)
 
         self.bind('<Configure>', self._on_window_configure)
+
+    # NOWOŚĆ: Metoda do tworzenia zakładki Duplikaty
+    def create_duplicates_tab(self):
+        # Toolbar
+        toolbar = ttk.Frame(self.duplicates_frame)
+        toolbar.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+
+        ttk.Button(toolbar, text="🔄 Odśwież", command=self.refresh_duplicates_tab, width=12).pack(side='left', padx=2)
+        ttk.Button(toolbar, text="✏️ Edytuj zaznaczonych", command=self.edit_selected_duplicates, width=18).pack(side='left', padx=2)
+        ttk.Button(toolbar, text="🗑️ Usuń zaznaczonych", command=self.delete_selected_duplicates, width=18).pack(side='left', padx=2)
+
+        # Treeview dla duplikatów (hierarchiczne)
+        dup_list_frame = ttk.Frame(self.duplicates_frame)
+        dup_list_frame.grid(row=1, column=0, sticky="nsew", pady=(0, 0))
+
+        # Kolumny: dla grup (uproszczone), dla rekordów (pełne)
+        columns = ("ID", "Imię", "Nazwisko", "Stanowisko", "Wydział", "Zmiana", "Status", "Maszyna/Urządzenie")
+        self.duplicates_tree = ttk.Treeview(dup_list_frame, columns=columns, show="tree headings", selectmode='extended')
+
+        # Nagłówki dla grup (tylko Imię, Nazwisko, Liczba)
+        self.duplicates_tree.heading("#0", text="Grupa", anchor='w')
+        self.duplicates_tree.heading("Imię", text="Imię")
+        self.duplicates_tree.heading("Nazwisko", text="Nazwisko")
+        self.duplicates_tree.heading("ID", text="ID")  # Tylko dla rekordów
+        for col in columns[1:]:  # Reszta dla rekordów
+            self.duplicates_tree.heading(col, text=col, anchor='center')
+            self.duplicates_tree.column(col, width=80, anchor='center', stretch=False)
+        self.duplicates_tree.column("ID", width=50, anchor='center', stretch=False)
+
+        v_scroll = ttk.Scrollbar(dup_list_frame, orient="vertical", command=self.duplicates_tree.yview)
+        h_scroll = ttk.Scrollbar(dup_list_frame, orient="horizontal", command=self.duplicates_tree.xview)
+        self.duplicates_tree.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
+
+        self.duplicates_tree.grid(row=0, column=0, sticky="nsew")
+        v_scroll.grid(row=0, column=1, sticky="ns")
+        h_scroll.grid(row=1, column=0, sticky="ew")
+
+        dup_list_frame.grid_rowconfigure(0, weight=1)
+        dup_list_frame.grid_columnconfigure(0, weight=1)
+
+        self.duplicates_tree.bind('<Double-1>', self.on_double_click_duplicate)
+        self.duplicates_tree.bind('<<TreeviewSelect>>', self.on_duplicates_selection_change)
+
+        self.duplicates_frame.grid_rowconfigure(1, weight=1)
+        self.duplicates_frame.grid_columnconfigure(0, weight=1)
+
+        # Odśwież na starcie
+        self.refresh_duplicates_tab()
+
+    # NOWOŚĆ: Odświeżanie zakładki Duplikaty
+    def refresh_duplicates_tab(self):
+        for item in self.duplicates_tree.get_children():
+            self.duplicates_tree.delete(item)
+
+        all_emps = self.emp_manager.get_all_employees() or []
+        groups = defaultdict(list)
+        for emp in all_emps:
+            key = (str(emp[1]).lower().strip(), str(emp[2]).lower().strip())  # Imię + Nazwisko (case-insensitive)
+            groups[key].append(emp)
+
+        dupe_groups = {k: v for k, v in groups.items() if len(v) > 1}
+
+        if not dupe_groups:
+            self.duplicates_tree.insert('', 'end', text="Brak duplikatów", values=('', '', '', '', '', '', '', ''))
+            return
+
+        for (imie_key, nazwisko_key), emps in dupe_groups.items():
+            # Parent: grupa
+            parent = self.duplicates_tree.insert('', 'end', text=f"Duplikat ({len(emps)} rekordów)", 
+                                                 values=(imie_key.title(), nazwisko_key.title(), len(emps), '', '', '', '', ''), 
+                                                 tags=('group',))
+            
+            # Children: rekordy
+            for emp in emps:
+                emp_id, imie, nazwisko, stanowisko, wydzial, zmiana, status, maszyna = emp[:8]
+                self.duplicates_tree.insert(parent, 'end', values=(emp_id, imie, nazwisko, stanowisko, wydzial, zmiana, status, maszyna), tags=('record',))
+
+        # Tagi dla stylizacji (opcjonalnie, np. grupy na czerwono)
+        self.duplicates_tree.tag_configure('group', background='#FFE6E6')  # Lekko czerwony dla grup
+
+    # NOWOŚĆ: Edytuj zaznaczonych duplikatów
+    def edit_selected_duplicates(self):
+        selected = self.duplicates_tree.selection()
+        if not selected:
+            messagebox.showwarning("Brak zaznaczenia", "Zaznacz rekordy do edycji.")
+            return
+
+        edited_count = 0
+        for item in selected:
+            tags = self.duplicates_tree.item(item, 'tags')
+            if 'record' not in tags:  # Tylko rekordy (nie grupy)
+                continue
+            values = self.duplicates_tree.item(item, 'values')
+            emp_id = int(values[0])
+            data = self.emp_manager.get_employee_by_id(emp_id)  # Zakładam metodę; jeśli nie, użyj db.fetch_one
+            if data:
+                dialog = EmployeeDialog(self, self.emp_manager, employee_data=data)
+                self.wait_window(dialog)
+                edited_count += 1
+
+        if edited_count > 0:
+            messagebox.showinfo("Sukces", f"Edytowano {edited_count} rekordów.")
+            self.refresh_employee_list()  # Odśwież główną listę i duplikaty
+            self.refresh_duplicates_tab()
+
+    # NOWOŚĆ: Usuń zaznaczonych duplikatów
+    def delete_selected_duplicates(self):
+        selected = self.duplicates_tree.selection()
+        if not selected:
+            messagebox.showwarning("Brak zaznaczenia", "Zaznacz rekordy do usunięcia.")
+            return
+
+        emp_ids = []
+        for item in selected:
+            tags = self.duplicates_tree.item(item, 'tags')
+            if 'record' not in tags:
+                continue
+            values = self.duplicates_tree.item(item, 'values')
+            emp_ids.append(int(values[0]))
+
+        if not messagebox.askyesno("Potwierdzenie", f"Usunąć {len(emp_ids)} zaznaczonych duplikatów?"):
+            return
+
+        deleted_count = 0
+        for emp_id in emp_ids:
+            if self.emp_manager.delete_employee(emp_id):
+                self._log_history_emp("Usunięcie duplikatu", f"Usunięto duplikat ID {emp_id}", emp_id)
+                deleted_count += 1
+
+        messagebox.showinfo("Sukces", f"Usunięto {deleted_count} duplikatów.")
+        self.refresh_employee_list()
+        self.refresh_duplicates_tab()
+
+    # NOWOŚĆ: Double-click na duplikacie (edytuj)
+    def on_double_click_duplicate(self, event):
+        item = self.duplicates_tree.identify_row(event.y)
+        if not item:
+            return
+        tags = self.duplicates_tree.item(item, 'tags')
+        if 'record' not in tags:
+            return
+        values = self.duplicates_tree.item(item, 'values')
+        emp_id = int(values[0])
+        data = self.emp_manager.get_employee_by_id(emp_id)
+        if data:
+            self.open_edit_dialog(data)
+
+    # NOWOŚĆ: Zmiana zaznaczenia w duplikatach (opcjonalnie, np. do podglądu)
+    def on_duplicates_selection_change(self, event):
+        pass  # Możesz dodać logikę, np. podgląd historii
 
     def create_employee_tab(self):
         self.create_toolbar(self.main_frame)
@@ -367,7 +525,9 @@ class MainWindow(tk.Tk):
         # Grid weights
         parent.grid_rowconfigure(2, weight=1)
         parent.grid_rowconfigure(3, weight=1)
-        parent.grid_columnconfigure(0, weight=1)    # --------- PRAWY PANEL HISTORII ---------
+        parent.grid_columnconfigure(0, weight=1)
+
+    # --------- PRAWY PANEL HISTORII ---------
     def create_history_side_panel(self):
         side = ttk.Frame(self.paned)
 
@@ -609,6 +769,9 @@ class MainWindow(tk.Tk):
         self.update_status_bar()
         self.on_selection_change(None)
         self.update_dashboard()
+        # NOWOŚĆ: Odśwież zakładkę duplikatów po zmianach
+        if hasattr(self, 'duplicates_tree'):
+            self.refresh_duplicates_tab()
         # UWAGA: bez nawiasów – przekazujemy referencję
         self.after_idle(self.schedule_autosize)
 
@@ -1235,11 +1398,67 @@ class MainWindow(tk.Tk):
                 messagebox.showerror("Błąd", "Nie udało się usunąć pracownika.")
 
     # ---------------- INNE OKNA ----------------
+    # ZMIANA: Dodano obsługę duplikatów po dodaniu
     def open_add_employee_dialog(self):
         dialog = EmployeeDialog(self, self.emp_manager)
         self.wait_window(dialog)
+        
+        # NOWOŚĆ: Sprawdź duplikaty po dodaniu
+        self._check_for_duplicates_after_add()
+        
         self.refresh_employee_list()
         self.apply_filters()
+
+    # NOWOŚĆ: Funkcja sprawdzająca duplikaty po dodaniu
+    def _check_for_duplicates_after_add(self):
+        try:
+            # Pobierz ID nowo dodanego (ostatni rekord)
+            last_id_result = self.db_manager.fetch_one("SELECT MAX(id) as last_id FROM employees")
+            if not last_id_result:
+                return
+            new_emp_id = last_id_result[0]
+            if not new_emp_id:
+                return
+
+            # Pobierz dane nowego
+            new_emp_data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (new_emp_id,))
+            if not new_emp_data:
+                return
+            new_imie, new_nazwisko = new_emp_data[1], new_emp_data[2]
+
+            # Sprawdź duplikaty (inny ID, to samo imię+nazwisko case-insensitive)
+            dup_query = """
+                SELECT id FROM employees 
+                WHERE LOWER(imie) = LOWER(?) AND LOWER(nazwisko) = LOWER(?) AND id != ?
+                LIMIT 1
+            """
+            duplicate = self.db_manager.fetch_one(dup_query, (new_imie, new_nazwisko, new_emp_id))
+            
+            if duplicate:
+                existing_id = duplicate[0]
+                response = messagebox.askyesno(
+                    "Duplikat wykryty!",
+                    f"Znaleziono istniejącego pracownika o imieniu '{new_imie}' i nazwisku '{new_nazwisko}' (ID: {existing_id}).\n\n"
+                    f"Czy chcesz edytować istniejącego zamiast dodawać nowy?"
+                )
+                
+                # W obu przypadkach usuń nowy duplikat
+                if self.emp_manager.delete_employee(new_emp_id):
+                    self._log_history_emp("Usunięcie duplikatu", f"Usunięto duplikat ID {new_emp_id} (imię: {new_imie}, nazwisko: {new_nazwisko})", new_emp_id)
+                
+                if response:
+                    # Edytuj istniejącego
+                    existing_data = self.emp_manager.db.fetch_one("SELECT * FROM employees WHERE id=?", (existing_id,))
+                    if existing_data:
+                        dialog = EmployeeDialog(self, self.emp_manager, employee_data=existing_data)
+                        self.wait_window(dialog)
+                        self.refresh_employee_list()
+                        self.apply_filters()
+                else:
+                    messagebox.showinfo("Anulowano", "Nowy wpis został usunięty, aby uniknąć duplikatów.")
+                    
+        except Exception as e:
+            messagebox.showerror("Błąd", f"Błąd podczas sprawdzania duplikatów: {e}")
 
     def show_summary(self):
         SummaryWindow(self, self.emp_manager)
