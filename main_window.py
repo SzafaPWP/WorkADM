@@ -51,7 +51,7 @@ class MainWindow(tk.Tk):
 
         # NOWOŚĆ: Stos undo (lista akcji do cofnięcia)
         self.undo_stack = []
-        self.undo_max_size = 50  # Maks. liczba akcji do cofnięcia
+        self.undo_max_size = 10  # Maks. liczba akcji do cofnięcia
 
         self.setup_light_theme()
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -394,8 +394,12 @@ class MainWindow(tk.Tk):
 
             for emp in to_delete:
                 emp_id = emp[0]
+                emp_data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (emp_id,))
                 if self.emp_manager.delete_employee(emp_id):
                     self._log_history_emp("Usunięcie duplikatu (wszystkie)", f"Usunięto duplikat ID {emp_id} (zostawiono ID {to_keep[0]})", emp_id)
+                    # Push undo dla delete
+                    if emp_data:
+                        self.push_undo_action('delete', f"Usunięcie duplikatu ID {emp_id}", data=emp_data)
                     deleted_count += 1
 
         messagebox.showinfo("Sukces", f"Usunięto {deleted_count} duplikatów z {groups_count} grup.\n(Zostawiono {'starsze' if keep_older else 'nowsze'} wpisy).")
@@ -423,8 +427,13 @@ class MainWindow(tk.Tk):
             # Użyj bezpośredniego zapytania do DB
             data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (emp_id,))
             if data:
+                old_data = list(data)  # Kopia przed edycją
                 dialog = EmployeeDialog(self, self.emp_manager, employee_data=data)
                 self.wait_window(dialog)
+                # Sprawdź zmiany i push undo
+                new_data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (emp_id,))
+                if new_data and tuple(new_data) != tuple(old_data):
+                    self.push_undo_action('edit', f"Edycja duplikatu ID {emp_id}", data=new_data, old_data=old_data)
                 edited_count += 1
             else:
                 print(f"Nie znaleziono danych dla ID {emp_id}")  # Debug
@@ -463,8 +472,12 @@ class MainWindow(tk.Tk):
 
         deleted_count = 0
         for emp_id in emp_ids:
+            emp_data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (emp_id,))
             if self.emp_manager.delete_employee(emp_id):
                 self._log_history_emp("Usunięcie duplikatu", f"Usunięto duplikat ID {emp_id}", emp_id)
+                # Push undo dla delete
+                if emp_data:
+                    self.push_undo_action('delete', f"Usunięcie duplikatu ID {emp_id}", data=emp_data)
                 deleted_count += 1
 
         messagebox.showinfo("Sukces", f"Usunięto {deleted_count} duplikatów.")
@@ -682,13 +695,11 @@ class MainWindow(tk.Tk):
             if not cols:
                 continue
             lower = [c.lower() for c in cols]
-
             def find(names):
                 for n in names:
                     if n in lower:
                         return cols[lower.index(n)]
                 return None
-
             ts = find(['timestamp', 'czas', 'date', 'created_at', 'created', 'ts', 'data', 'datetime'])
             action = find(['action', 'akcja', 'type', 'event', 'operation'])
             details = find(['details', 'szczegoly', 'message', 'opis', 'info', 'detail', 'msg'])
@@ -1108,10 +1119,7 @@ class MainWindow(tk.Tk):
     def on_double_click_employee(self, event):
         data = self.get_selected_employee_data()
         if data:
-            dialog = EmployeeDialog(self, self.emp_manager, employee_data=data)
-            self.wait_window(dialog)
-            self.refresh_employee_list()
-            self.apply_filters()
+            self.open_edit_dialog(data)
 
     def on_selection_change(self, event):
         self.populate_side_history()
@@ -1189,12 +1197,13 @@ class MainWindow(tk.Tk):
         self.wait_window(dialog)
         
         # Po edycji: sprawdź, czy dane się zmieniły, i dodaj do undo
+        emp_id = old_data[0]
         try:
-            new_data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (old_data[0],))
+            new_data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (emp_id,))
             if new_data and tuple(new_data) != tuple(old_data):  # POPRAWKA: tuple() dla porównania
-                self.push_undo_action('edit', f"Edycja pracownika {old_data[1]} {old_data[2]} (ID: {old_data[0]})", 
+                self.push_undo_action('edit', f"Edycja pracownika {old_data[1]} {old_data[2]} (ID: {emp_id})", 
                                       data=new_data, old_data=old_data)
-                print(f"DEBUG: Dodano push edit dla ID {old_data[0]}")
+                print(f"DEBUG: Dodano push edit dla ID {emp_id}")
         except Exception as e:
             print(f"DEBUG Błąd push edit: {e}")
         
@@ -1232,9 +1241,14 @@ class MainWindow(tk.Tk):
             for emp_id in selected_ids:
                 old_row = self._get_emp_row(emp_id)
                 old_status = old_row[6] if old_row else None
+                old_data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (emp_id,))
                 if self.emp_manager.update_employee_status(emp_id, new_status):
                     success_count += 1
                     self._log_field_change(emp_id, "Status", old_status, new_status)
+                    # Push undo dla edit
+                    new_data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (emp_id,))
+                    if new_data and old_data:
+                        self.push_undo_action('edit', f"Grupowa zmiana statusu ID {emp_id}", data=new_data, old_data=old_data)
             status_dialog.destroy()
             messagebox.showinfo("Sukces", f"Zmieniono status dla {success_count}/{len(selected_ids)} pracowników.")
             self.refresh_employee_list()
@@ -1291,8 +1305,13 @@ class MainWindow(tk.Tk):
                 return
             success_count = 0
             for emp_id in selected_ids:
+                old_data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (emp_id,))
                 if self.safe_move_employee(emp_id, new_wydzial, new_zmiana, new_stanowisko):
                     success_count += 1
+                    # Push undo dla edit (po zmianie)
+                    new_data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (emp_id,))
+                    if new_data and old_data:
+                        self.push_undo_action('edit', f"Grupowe przeniesienie ID {emp_id}", data=new_data, old_data=old_data)
             move_dialog.destroy()
             messagebox.showinfo("Sukces", f"Przeniesiono {success_count}/{len(selected_ids)} pracowników.")
             self.refresh_employee_list()
@@ -1333,9 +1352,14 @@ class MainWindow(tk.Tk):
             for emp_id in selected_ids:
                 old_row = self._get_emp_row(emp_id)
                 old_machine = old_row[7] if old_row else None
+                old_data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (emp_id,))
                 if self.emp_manager.update_employee_machine(emp_id, new_machine):
                     success_count += 1
                     self._log_field_change(emp_id, "Maszyna", old_machine, new_machine)
+                    # Push undo dla edit
+                    new_data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (emp_id,))
+                    if new_data and old_data:
+                        self.push_undo_action('edit', f"Grupowa zmiana maszyny ID {emp_id}", data=new_data, old_data=old_data)
             machine_dialog.destroy()
             messagebox.showinfo("Sukces", f"Zmieniono maszynę dla {success_count}/{len(selected_ids)} pracowników.")
             self.refresh_employee_list()
@@ -1356,9 +1380,13 @@ class MainWindow(tk.Tk):
                                f"Czy na pewno chcesz usunąć {len(selected_ids)} zaznaczonych pracowników?"):
             success_count = 0
             for emp_id in selected_ids:
+                emp_data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (emp_id,))
                 if self.emp_manager.delete_employee(emp_id):
                     success_count += 1
                     self._log_history_emp("Usunięcie pracownika", "Usunięto pracownika z bazy", emp_id)
+                    # Push undo dla delete
+                    if emp_data:
+                        self.push_undo_action('delete', f"Usunięcie pracownika ID {emp_id}", data=emp_data)
             messagebox.showinfo("Sukces", f"Usunięto {success_count}/{len(selected_ids)} pracowników.")
             self.refresh_employee_list()
             self.apply_filters()
@@ -1440,6 +1468,7 @@ class MainWindow(tk.Tk):
         old_w, old_z, old_s = (old_row[4] if old_row else None,
                                old_row[5] if old_row else None,
                                old_row[3] if old_row else None)
+        old_data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (emp_id,))
 
         if not new_zmiana or (new_zmiana and "Wolne" in new_zmiana):
             result = self.emp_manager.move_employee(emp_id, new_wydzial, new_zmiana, new_stanowisko)
@@ -1485,7 +1514,11 @@ class MainWindow(tk.Tk):
 
             result = self.emp_manager.move_employee(emp_id, new_wydzial, new_zmiana, new_stanowisko)
 
-        if result:
+        if result and old_data:
+            # Push undo dla edit po zmianie
+            new_data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (emp_id,))
+            if new_data:
+                self.push_undo_action('edit', f"Przeniesienie pracownika ID {emp_id}", data=new_data, old_data=old_data)
             if new_wydzial is not None:
                 self._log_field_change(emp_id, "Wydział", old_w, new_wydzial)
             if new_zmiana is not None:
@@ -1513,8 +1546,13 @@ class MainWindow(tk.Tk):
     def change_status_action(self, emp_id, new_status):
         old_row = self._get_emp_row(emp_id)
         old_status = old_row[6] if old_row else None
+        old_data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (emp_id,))
         if self.emp_manager.update_employee_status(emp_id, new_status):
             self._log_field_change(emp_id, "Status", old_status, new_status)
+            # Push undo dla edit
+            new_data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (emp_id,))
+            if new_data and old_data:
+                self.push_undo_action('edit', f"Zmiana statusu ID {emp_id}", data=new_data, old_data=old_data)
             messagebox.showinfo("Sukces", f"Status zmieniony na '{new_status}' i historia zapisana.")
             self.refresh_employee_list()
             self.apply_filters()
@@ -1610,15 +1648,14 @@ class MainWindow(tk.Tk):
                 # W obu przypadkach usuń nowy duplikat
                 if self.emp_manager.delete_employee(new_emp_id):
                     self._log_history_emp("Usunięcie duplikatu", f"Usunięto duplikat ID {new_emp_id} (imię: {new_imie}, nazwisko: {new_nazwisko})", new_emp_id)
+                    # Push undo dla delete duplikatu
+                    self.push_undo_action('delete', f"Usunięcie duplikatu ID {new_emp_id}", data=new_emp_data)
                 
                 if response:
                     # Edytuj istniejącego
                     existing_data = self.emp_manager.db.fetch_one("SELECT * FROM employees WHERE id=?", (existing_id,))
                     if existing_data:
-                        dialog = EmployeeDialog(self, self.emp_manager, employee_data=existing_data)
-                        self.wait_window(dialog)
-                        self.refresh_employee_list()
-                        self.apply_filters()
+                        self.open_edit_dialog(existing_data)
                 else:
                     messagebox.showinfo("Anulowano", "Nowy wpis został usunięty, aby uniknąć duplikatów.")
                     
@@ -1776,86 +1813,80 @@ class MainWindow(tk.Tk):
             self.destroy()
 
     # ---------------- NOWOŚĆ: SYSTEM UNDO ----------------
-    # Dodaj akcję do stosu undo
     def push_undo_action(self, action_type, description, data=None, old_data=None):
+        """Dodaje akcję do stosu undo."""
         action = {
-            'type': action_type,  # 'add', 'edit', 'delete'
-            'description': description,  # Np. "Dodanie pracownika Jan Kowalski (ID: 123)"
-            'data': data,  # Aktualne dane (dla add/delete)
-            'old_data': old_data,  # Stare dane (dla edit)
-            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            'type': action_type,
+            'description': description,
+            'data': data,
+            'old_data': old_data,
+            'timestamp': datetime.now()
         }
+        
         self.undo_stack.append(action)
+        
+        # Ogranicz rozmiar stosu
         if len(self.undo_stack) > self.undo_max_size:
-            self.undo_stack.pop(0)  # Usuń najstarszą
+            self.undo_stack.pop(0)
         
-        # POPRAWKA: Zawsze aktywuj przycisk, jeśli stos niepusty
-        if hasattr(self, 'undo_button') and self.undo_button['state'] == 'disabled' and len(self.undo_stack) > 0:
-            self.undo_button.config(state='normal')
+        # Aktywuj przycisk Cofnij
+        self.undo_button.config(state='normal')
         
-        print(f"DEBUG Undo: Dodano '{description}' (stos: {len(self.undo_stack)}, przycisk: {self.undo_button['state']})")
+        print(f"DEBUG: Dodano akcję undo: {description} (stos: {len(self.undo_stack)})")
 
-    # Cofnij ostatnią akcję
     def undo_last_action(self):
+        """Cofa ostatnią akcję ze stosu undo."""
         if not self.undo_stack:
             messagebox.showinfo("Brak akcji", "Nie ma akcji do cofnięcia.")
             return
-
-        last_action = self.undo_stack.pop()
-        action_type = last_action['type']
-        description = last_action['description']
-
+        
+        action = self.undo_stack.pop()
+        
         try:
-            if action_type == 'add':
-                # Cofnij dodanie: usuń pracownika po ID
-                emp_id = last_action['data'][0] if last_action['data'] else None
-                if emp_id and self.emp_manager.delete_employee(emp_id):
-                    self._log_history_emp("Cofnięcie dodania", f"Cofnięto dodanie: {description}", emp_id)
-                    messagebox.showinfo("Cofnięto", f"Cofnięto: {description}")
-                    self.refresh_employee_list()
-                    self.apply_filters()
-                else:
-                    messagebox.showerror("Błąd", "Nie udało się cofnąć dodania.")
-
-            elif action_type == 'edit':
-                # Cofnij edycję: przywróć stare dane
-                emp_id = last_action['old_data'][0] if last_action['old_data'] else None
-                if emp_id and last_action['old_data']:
-                    # Użyj update_employee z starymi danymi
-                    if self.emp_manager.update_employee(emp_id, last_action['old_data']):
-                        self._log_history_emp("Cofnięcie edycji", f"Cofnięto edycję: {description}", emp_id)
-                        messagebox.showinfo("Cofnięto", f"Cofnięto: {description}")
-                        self.refresh_employee_list()
-                        self.apply_filters()
-                    else:
-                        messagebox.showerror("Błąd", "Nie udało się cofnąć edycji.")
-                else:
-                    messagebox.showerror("Błąd", "Brak danych do przywrócenia.")
-
-            elif action_type == 'delete':
-                # Cofnij usunięcie: dodaj z powrotem
-                if last_action['data']:
-                    if self.emp_manager.add_employee(last_action['data']):
-                        emp_id = last_action['data'][0] if last_action['data'] else None
-                        self._log_history_emp("Cofnięcie usunięcia", f"Cofnięto usunięcie: {description}", emp_id)
-                        messagebox.showinfo("Cofnięto", f"Cofnięto: {description}")
-                        self.refresh_employee_list()
-                        self.apply_filters()
-                    else:
-                        messagebox.showerror("Błąd", "Nie udało się cofnąć usunięcia.")
-                else:
-                    messagebox.showerror("Błąd", "Brak danych do przywrócenia.")
-
-            # Deaktywuj przycisk, jeśli stos pusty
-            if not self.undo_stack:
-                if hasattr(self, 'undo_button'):
-                    self.undo_button.config(state='disabled')
-            print(f"DEBUG Undo: Cofnięto '{description}' (pozostało: {len(self.undo_stack)}, przycisk: {self.undo_button['state']})")
-
+            if action['type'] == 'add':
+                # Cofnięcie dodania - usuń pracownika
+                emp_id = action['data'][0]
+                if self.emp_manager.delete_employee(emp_id):
+                    self.emp_manager.log_history("Cofnięcie dodania", f"Cofnięto dodanie pracownika: {action['description']}")
+                    messagebox.showinfo("Cofnięto", f"Cofnięto: {action['description']}")
+            
+            elif action['type'] == 'edit':
+                # Cofnięcie edycji - przywróć stare dane
+                emp_id = action['old_data'][0]
+                old_data = action['old_data']
+                
+                # Przywróć stare dane
+                self.db_manager.execute_query("""
+                    UPDATE employees 
+                    SET imie=?, nazwisko=?, stanowisko=?, wydzial=?, zmiana=?, status=?, maszyna=?
+                    WHERE id=?
+                """, (old_data[1], old_data[2], old_data[3], old_data[4], old_data[5], old_data[6], old_data[7], emp_id))
+                
+                self.emp_manager.log_history("Cofnięcie edycji", f"Cofnięto edycję pracownika: {action['description']}")
+                messagebox.showinfo("Cofnięto", f"Cofnięto: {action['description']}")
+            
+            elif action['type'] == 'delete':
+                # Cofnięcie usunięcia - przywróć pracownika
+                emp_data = action['data']
+                self.db_manager.execute_query("""
+                    INSERT INTO employees (id, imie, nazwisko, stanowisko, wydzial, zmiana, status, maszyna)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (emp_data[0], emp_data[1], emp_data[2], emp_data[3], emp_data[4], emp_data[5], emp_data[6], emp_data[7]))
+                
+                self.emp_manager.log_history("Cofnięcie usunięcia", f"Cofnięto usunięcie pracownika: {action['description']}")
+                messagebox.showinfo("Cofnięto", f"Cofnięto: {action['description']}")
+        
         except Exception as e:
-            messagebox.showerror("Błąd cofania", f"Nie udało się cofnąć akcji: {e}")
-            # Przywróć akcję do stosu na błąd
-            self.undo_stack.append(last_action)
+            messagebox.showerror("Błąd", f"Nie udało się cofnąć akcji: {str(e)}")
+            # Przywróć akcję do stosu w przypadku błędu
+            self.undo_stack.append(action)
+        
+        # Odśwież interfejs
+        self.refresh_employee_list()
+        
+        # Deaktywuj przycisk jeśli stos pusty
+        if not self.undo_stack:
+            self.undo_button.config(state='disabled')
 
 
 if __name__ == "__main__":
