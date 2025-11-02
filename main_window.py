@@ -594,7 +594,7 @@ class MainWindow(tk.Tk):
             self.employee_tree.column(col, width=80, anchor='center', stretch=False)
 
         self.employee_tree.column("Urlop od-do", width=140, minwidth=110, anchor='center', stretch=False)
-        self.employee_tree.column("L4 od-do",    width=120, minwidth=100, anchor='center', stretch=False)
+        self.employee_tree.column("L4 od-do",    width=200, minwidth=180, anchor='center', stretch=False)
 
         v_scroll = ttk.Scrollbar(self.list_frame, orient="vertical", command=self.employee_tree.yview)
         h_scroll = ttk.Scrollbar(self.list_frame, orient="horizontal", command=self.employee_tree.xview)
@@ -627,7 +627,7 @@ class MainWindow(tk.Tk):
 
         header = ttk.Frame(side)
         header.pack(fill='x', padx=6, pady=(6, 4))
-        ttk.Label(header, text="📋 Historia (zmian każdego pracownika", font=('Arial', 10, 'bold')).pack(side='left')
+        ttk.Label(header, text="📋 Historia (zmian każdego pracownika)", font=('Arial', 10, 'bold')).pack(side='left')
 
         cols = ('Czas', 'Akcja', 'Szczegóły')
         self.history_tree = ttk.Treeview(side, columns=cols, show='headings', height=12)
@@ -881,7 +881,7 @@ class MainWindow(tk.Tk):
         default_max = {
             "ID": 54, "Imię": 120, "Nazwisko": 150, "Stanowisko": 190,
             "Wydział": 170, "Zmiana": 160, "Status": 120, "Maszyna/Urządzenie": 180,
-            "Urlop od-do": 140, "L4 od-do": 120
+            "Urlop od-do": 140, "L4 od-do": 200
         }
         if max_col_widths:
             default_max.update(max_col_widths)
@@ -911,7 +911,7 @@ class MainWindow(tk.Tk):
                 w_data = max(w_data, font_data.measure(str(val)) + 18)
 
             width = max(min_widths.get(col, 60),
-                        min(max(w_header, w_data), default_max.get(col, 220)))
+                        min(max(w_header, w_data), default_max.get(col, 300)))
 
             tv.heading(col, anchor='center')
             tv.column(col, width=int(width), stretch=False, anchor='center')
