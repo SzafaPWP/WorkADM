@@ -444,20 +444,28 @@ class EmployeeManagement:
 
     def get_active_vacation(self, emp_id):
         """Pobiera aktywny urlop pracownika"""
-        today = datetime.datetime.now().date()
-        return self.db.fetch_one("""
-            SELECT start_date, end_date 
-            FROM vacations 
-            WHERE employee_id = ? AND start_date <= ? AND end_date >= ?
-            ORDER BY start_date DESC LIMIT 1
-        """, (emp_id, today, today))
+        try:
+            today = datetime.datetime.now().date()
+            return self.db.fetch_one("""
+                SELECT start_date, end_date 
+                FROM vacations 
+                WHERE employee_id = ? AND start_date <= ? AND end_date >= ?
+                ORDER BY start_date DESC LIMIT 1
+            """, (emp_id, today, today))
+        except Exception as e:
+            print(f"Błąd pobierania urlopu: {e}")
+            return None
 
     def get_active_l4(self, emp_id):
         """Pobiera aktywne L4 pracownika"""
-        today = datetime.datetime.now().date()
-        return self.db.fetch_one("""
-            SELECT start_date, end_date 
-            FROM l4_records 
-            WHERE employee_id = ? AND start_date <= ? AND end_date >= ?
-            ORDER BY start_date DESC LIMIT 1
-        """, (emp_id, today, today))
+        try:
+            today = datetime.datetime.now().date()
+            return self.db.fetch_one("""
+                SELECT start_date, end_date 
+                FROM l4_records 
+                WHERE employee_id = ? AND start_date <= ? AND end_date >= ?
+                ORDER BY start_date DESC LIMIT 1
+            """, (emp_id, today, today))
+        except Exception as e:
+            print(f"Błąd pobierania L4: {e}")
+            return None
