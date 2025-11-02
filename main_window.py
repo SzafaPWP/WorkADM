@@ -251,19 +251,37 @@ class MainWindow(tk.Tk):
         dup_list_frame = ttk.Frame(self.duplicates_frame)
         dup_list_frame.grid(row=1, column=0, sticky="nsew", pady=(0, 0))
 
-        # Kolumny: dla grup (uproszczone), dla rekordów (pełne)
+                # Kolumny: dla grup (uproszczone), dla rekordów (pełne) – szersze
         columns = ("ID", "Imię", "Nazwisko", "Stanowisko", "Wydział", "Zmiana", "Status", "Maszyna/Urządzenie")
         self.duplicates_tree = ttk.Treeview(dup_list_frame, columns=columns, show="tree headings", selectmode='extended')
 
-        # Nagłówki dla grup (tylko Imię, Nazwisko, Liczba)
+        # Nagłówki i szerokości (zwiększone, stretch dla rozciągania)
         self.duplicates_tree.heading("#0", text="Grupa", anchor='w')
-        self.duplicates_tree.heading("Imię", text="Imię")
-        self.duplicates_tree.heading("Nazwisko", text="Nazwisko")
-        self.duplicates_tree.heading("ID", text="ID")  # Tylko dla rekordów
-        for col in columns[1:]:  # Reszta dla rekordów
-            self.duplicates_tree.heading(col, text=col, anchor='center')
-            self.duplicates_tree.column(col, width=80, anchor='center', stretch=False)
-        self.duplicates_tree.column("ID", width=50, anchor='center', stretch=False)
+        self.duplicates_tree.column("#0", width=150, minwidth=120, anchor='w', stretch=False)  # Węższa grupa
+
+        self.duplicates_tree.heading("Imię", text="Imię", anchor='center')
+        self.duplicates_tree.column("Imię", width=100, minwidth=80, anchor='center', stretch=True)
+
+        self.duplicates_tree.heading("Nazwisko", text="Nazwisko", anchor='center')
+        self.duplicates_tree.column("Nazwisko", width=120, minwidth=100, anchor='center', stretch=True)
+
+        self.duplicates_tree.heading("ID", text="ID", anchor='center')
+        self.duplicates_tree.column("ID", width=60, minwidth=50, anchor='center', stretch=False)
+
+        self.duplicates_tree.heading("Stanowisko", text="Stanowisko", anchor='center')
+        self.duplicates_tree.column("Stanowisko", width=150, minwidth=120, anchor='center', stretch=True)
+
+        self.duplicates_tree.heading("Wydział", text="Wydział", anchor='center')
+        self.duplicates_tree.column("Wydział", width=120, minwidth=100, anchor='center', stretch=True)
+
+        self.duplicates_tree.heading("Zmiana", text="Zmiana", anchor='center')
+        self.duplicates_tree.column("Zmiana", width=100, minwidth=80, anchor='center', stretch=True)
+
+        self.duplicates_tree.heading("Status", text="Status", anchor='center')
+        self.duplicates_tree.column("Status", width=100, minwidth=80, anchor='center', stretch=True)
+
+        self.duplicates_tree.heading("Maszyna/Urządzenie", text="Maszyna/Urządzenie", anchor='center')
+        self.duplicates_tree.column("Maszyna/Urządzenie", width=200, minwidth=160, anchor='center', stretch=True)  # Szersza ostatnia kolumna
 
         v_scroll = ttk.Scrollbar(dup_list_frame, orient="vertical", command=self.duplicates_tree.yview)
         h_scroll = ttk.Scrollbar(dup_list_frame, orient="horizontal", command=self.duplicates_tree.xview)
