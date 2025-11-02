@@ -3,7 +3,7 @@ from tkinter import ttk, messagebox, filedialog
 from tkinter import font as tkfont
 from datetime import datetime
 import pandas as pd
-from collections import defaultdict  # NOWOŚĆ: do grupowania duplikatów
+from collections import defaultdict
 
 from employee_management import EmployeeManagement
 from db_manager import DBManager
@@ -48,6 +48,10 @@ class MainWindow(tk.Tk):
         self._autosize_job = None
         self._history_pane_visible = True
         self._history_meta = None
+
+        # NOWOŚĆ: Stos undo (lista akcji do cofnięcia)
+        self.undo_stack = []
+        self.undo_max_size = 50  # Maks. liczba akcji do cofnięcia
 
         self.setup_light_theme()
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -213,7 +217,7 @@ class MainWindow(tk.Tk):
         self.main_frame = ttk.Frame(self.notebook, padding="10")
         self.notebook.add(self.main_frame, text="👥 Pracownicy")
 
-        # NOWOŚĆ: Zakładka Duplikaty
+        # Zakładka Duplikaty
         self.duplicates_frame = ttk.Frame(self.notebook, padding="10")
         self.notebook.add(self.duplicates_frame, text="🔁 Duplikaty")
 
@@ -221,7 +225,7 @@ class MainWindow(tk.Tk):
         self.refresh_employee_list()
         self.update_dashboard()
 
-        # NOWOŚĆ: Utwórz zakładkę duplikatów
+        # Utwórz zakładkę duplikatów
         self.create_duplicates_tab()
 
         self.main_frame.grid_rowconfigure(2, weight=1)  # lista (bez kafelka)
@@ -230,20 +234,20 @@ class MainWindow(tk.Tk):
 
         self.bind('<Configure>', self._on_window_configure)
 
-    # NOWOŚĆ: Metoda do tworzenia zakładki Duplikaty
+    # Metoda do tworzenia zakładki Duplikaty
     def create_duplicates_tab(self):
         # Toolbar
         toolbar = ttk.Frame(self.duplicates_frame)
         toolbar.grid(row=0, column=0, sticky="ew", pady=(0, 8))
 
         ttk.Button(toolbar, text="🔄 Odśwież", command=self.refresh_duplicates_tab, width=12).pack(side='left', padx=2)
-        ttk.Button(toolbar, text="✏️ Edytuj zaznaczone", command=self.edit_selected_duplicates, width=24).pack(side='left', padx=2)
-        ttk.Button(toolbar, text="🗑️ Usuń zaznaczone", command=self.delete_selected_duplicates, width=24).pack(side='left', padx=2)
+        ttk.Button(toolbar, text="✏️ Edytuj zaznaczonych", command=self.edit_selected_duplicates, width=24).pack(side='left', padx=2)
+        ttk.Button(toolbar, text="🗑️ Usuń zaznaczonych", command=self.delete_selected_duplicates, width=18).pack(side='left', padx=2)
         
-        # NOWOŚĆ: Przycisk "Usuń wszystkie duplikaty"
+        # Przycisk "Usuń wszystkie duplikaty"
         ttk.Button(toolbar, text="🗑️ Usuń wszystkie duplikaty", command=self.delete_all_duplicates_dialog, width=28).pack(side='left', padx=2)
 
-        # NOWOŚĆ: Label z liczbą duplikatów
+        # Label z liczbą duplikatów
         self.duplicates_count_label = ttk.Label(toolbar, text="Znaleziono 0 grup duplikatów", font=('Arial', 9))
         self.duplicates_count_label.pack(side='right', padx=10)
 
@@ -251,7 +255,7 @@ class MainWindow(tk.Tk):
         dup_list_frame = ttk.Frame(self.duplicates_frame)
         dup_list_frame.grid(row=1, column=0, sticky="nsew", pady=(0, 0))
 
-                # Kolumny: dla grup (uproszczone), dla rekordów (pełne) – szersze
+        # Kolumny: dla grup (uproszczone), dla rekordów (pełne) – szersze
         columns = ("ID", "Imię", "Nazwisko", "Stanowisko", "Wydział", "Zmiana", "Status", "Maszyna/Urządzenie")
         self.duplicates_tree = ttk.Treeview(dup_list_frame, columns=columns, show="tree headings", selectmode='extended')
 
@@ -303,7 +307,7 @@ class MainWindow(tk.Tk):
         # Odśwież na starcie
         self.refresh_duplicates_tab()
 
-    # NOWOŚĆ: Odświeżanie zakładki Duplikaty (z licznikiem)
+    # Odświeżanie zakładki Duplikaty (z licznikiem)
     def refresh_duplicates_tab(self):
         for item in self.duplicates_tree.get_children():
             self.duplicates_tree.delete(item)
@@ -316,7 +320,7 @@ class MainWindow(tk.Tk):
 
         dupe_groups = {k: v for k, v in groups.items() if len(v) > 1}
         
-        # NOWOŚĆ: Aktualizuj licznik
+        # Aktualizuj licznik
         num_groups = len(dupe_groups)
         total_duplicates = sum(len(emps) - 1 for emps in dupe_groups.values())  # Liczba duplikatów do usunięcia
         self.duplicates_count_label.config(text=f"Znaleziono {num_groups} grup duplikatów ({total_duplicates} duplikatów)")
@@ -336,10 +340,10 @@ class MainWindow(tk.Tk):
                 emp_id, imie, nazwisko, stanowisko, wydzial, zmiana, status, maszyna = emp[:8]
                 self.duplicates_tree.insert(parent, 'end', values=(emp_id, imie, nazwisko, stanowisko, wydzial, zmiana, status, maszyna), tags=('record',))
 
-        # Tagi dla stylizacji (opcjonalnie, np. grupy na czerwono)
+        # Tagi dla stylizacji
         self.duplicates_tree.tag_configure('group', background='#FFE6E6')  # Lekko czerwony dla grup
 
-    # NOWOŚĆ: Dialog wyboru dla "Usuń wszystkie duplikaty"
+    # Dialog wyboru dla "Usuń wszystkie duplikaty"
     def delete_all_duplicates_dialog(self):
         if not self.duplicates_count_label.cget('text').startswith('Znaleziono 0'):
             dialog = tk.Toplevel(self)
@@ -363,7 +367,7 @@ class MainWindow(tk.Tk):
         else:
             messagebox.showinfo("Brak duplikatów", "Nie znaleziono duplikatów do usunięcia.")
 
-    # NOWOŚĆ: Usuń wszystkie duplikaty (z opcją starsze/nowsze)
+    # Usuń wszystkie duplikaty (z opcją starsze/nowsze)
     def delete_all_duplicates(self, keep_older=True):
         all_emps = self.emp_manager.get_all_employees() or []
         groups = defaultdict(list)
@@ -398,7 +402,7 @@ class MainWindow(tk.Tk):
         self.refresh_employee_list()
         self.refresh_duplicates_tab()
 
-    # ZMIANA: Edytuj zaznaczonych duplikatów (poprawka na brak metody get_employee_by_id)
+    # Edytuj zaznaczonych duplikatów
     def edit_selected_duplicates(self):
         selected = self.duplicates_tree.selection()
         if not selected:
@@ -416,14 +420,14 @@ class MainWindow(tk.Tk):
             except (ValueError, IndexError):
                 continue  # Pomijamy, jeśli nie da się sparsować ID
             
-            # POPRAWKA: Użyj bezpośredniego zapytania do DB zamiast emp_manager.get_employee_by_id
+            # Użyj bezpośredniego zapytania do DB
             data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (emp_id,))
             if data:
                 dialog = EmployeeDialog(self, self.emp_manager, employee_data=data)
                 self.wait_window(dialog)
                 edited_count += 1
             else:
-                print(f"Nie znaleziono danych dla ID {emp_id}")  # Debug: usuń po teście
+                print(f"Nie znaleziono danych dla ID {emp_id}")  # Debug
 
         if edited_count > 0:
             messagebox.showinfo("Sukces", f"Otwarto edycję dla {edited_count} rekordów.")
@@ -432,7 +436,7 @@ class MainWindow(tk.Tk):
         else:
             messagebox.showwarning("Brak edycji", "Nie udało się otworzyć edycji dla zaznaczonych rekordów.")
 
-    # ZMIANA: Usuń zaznaczonych duplikatów
+    # Usuń zaznaczonych duplikatów
     def delete_selected_duplicates(self):
         selected = self.duplicates_tree.selection()
         if not selected:
@@ -467,7 +471,7 @@ class MainWindow(tk.Tk):
         self.refresh_employee_list()
         self.refresh_duplicates_tab()
 
-    # ZMIANA: Double-click na duplikacie (edytuj) – poprawka na brak metody get_employee_by_id
+    # Double-click na duplikacie (edytuj)
     def on_double_click_duplicate(self, event):
         item = self.duplicates_tree.identify_row(event.y)
         if not item:
@@ -481,14 +485,14 @@ class MainWindow(tk.Tk):
         except (ValueError, IndexError):
             return
         
-        # POPRAWKA: Użyj bezpośredniego zapytania do DB
+        # Użyj bezpośredniego zapytania do DB
         data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (emp_id,))
         if data:
             self.open_edit_dialog(data)
         else:
             messagebox.showerror("Błąd", f"Nie znaleziono danych pracownika o ID {emp_id}.")
 
-    # NOWOŚĆ: Zmiana zaznaczenia w duplikatach (opcjonalnie, np. do podglądu)
+    # Zmiana zaznaczenia w duplikatach
     def on_duplicates_selection_change(self, event):
         pass  # Możesz dodać logikę, np. podgląd historii
 
@@ -507,6 +511,11 @@ class MainWindow(tk.Tk):
         ttk.Button(actions_frame, text="➕ Dodaj Pracownika",
                    command=self.open_add_employee_dialog, width=18).pack(side='left', padx=2)
 
+        # NOWOŚĆ: Przycisk Cofnij (aktywny, jeśli są akcje)
+        self.undo_button = ttk.Button(actions_frame, text="↶ Cofnij",
+                                      command=self.undo_last_action, width=12, state='disabled')
+        self.undo_button.pack(side='left', padx=2)
+
         group_menu = tk.Menubutton(actions_frame, text="👥 Operacje Grupowe",
                                    relief='raised', width=18)
         group_menu.pack(side='left', padx=2)
@@ -524,13 +533,13 @@ class MainWindow(tk.Tk):
         group_menu.menu.add_command(label="🗑️ Usuń Zaznaczonych", command=self.bulk_delete_employees)
 
         ttk.Button(actions_frame, text="📊 Podsumowanie",
-                   command=self.show_summary, width=18).pack(side='left', padx=2)
+                   command=self.show_summary, width=15).pack(side='left', padx=2)
         ttk.Button(actions_frame, text="📋 Historia",
                    command=self.show_history, width=12).pack(side='left', padx=2)
 
         # Przełącznik bocznego podglądu historii
         ttk.Button(actions_frame, text="🕘 Podgląd historii",
-                   command=self.toggle_side_history, width=17).pack(side='left', padx=2)
+                   command=self.toggle_side_history, width=16).pack(side='left', padx=2)
 
         ttk.Button(actions_frame, text="🎨 Kolory",
                    command=self.show_color_editor, width=12).pack(side='left', padx=2)
@@ -639,13 +648,13 @@ class MainWindow(tk.Tk):
         parent.grid_rowconfigure(3, weight=1)
         parent.grid_columnconfigure(0, weight=1)
 
-    # --------- PRAWY PANEL HISTORII ---------
+    # PRAWY PANEL HISTORII
     def create_history_side_panel(self):
         side = ttk.Frame(self.paned)
 
         header = ttk.Frame(side)
         header.pack(fill='x', padx=6, pady=(6, 4))
-        ttk.Label(header, text="📋 Historia (zmian każdego pracownika)", font=('Arial', 10, 'bold')).pack(side='left')
+        ttk.Label(header, text="📋 Historia (podgląd)", font=('Arial', 10, 'bold')).pack(side='left')
 
         cols = ('Czas', 'Akcja', 'Szczegóły')
         self.history_tree = ttk.Treeview(side, columns=cols, show='headings', height=12)
@@ -661,7 +670,7 @@ class MainWindow(tk.Tk):
         yscroll.pack(side='left', fill='y', padx=(0,6), pady=(0,6))
         return side
 
-    # ---------- WSPARCIE HISTORII (detekcja i logowanie) ----------
+    # WSPARCIE HISTORII (detekcja i logowanie)
     def _detect_history_table_and_columns(self):
         candidates = ['history', 'historia', 'employee_history', 'log_history', 'logs']
         for t in candidates:
@@ -881,7 +890,7 @@ class MainWindow(tk.Tk):
         self.update_status_bar()
         self.on_selection_change(None)
         self.update_dashboard()
-        # NOWOŚĆ: Odśwież zakładkę duplikatów po zmianach
+        # Odśwież zakładkę duplikatów po zmianach
         if hasattr(self, 'duplicates_tree'):
             self.refresh_duplicates_tab()
         # UWAGA: bez nawiasów – przekazujemy referencję
@@ -899,7 +908,7 @@ class MainWindow(tk.Tk):
         default_max = {
             "ID": 54, "Imię": 120, "Nazwisko": 150, "Stanowisko": 190,
             "Wydział": 170, "Zmiana": 160, "Status": 120, "Maszyna/Urządzenie": 180,
-            "Urlop od-do": 140, "L4 od-do": 200
+            "Urlop od-do": 140, "L4 od-do": 200  # Zwiększony limit
         }
         if max_col_widths:
             default_max.update(max_col_widths)
@@ -907,7 +916,7 @@ class MainWindow(tk.Tk):
         min_widths = {
             "ID": 44, "Imię": 80, "Nazwisko": 100, "Stanowisko": 120,
             "Wydział": 120, "Zmiana": 120, "Status": 100, "Maszyna/Urządzenie": 120,
-            "Urlop od-do": 110, "L4 od-do": 100
+            "Urlop od-do": 110, "L4 od-do": 180  # Zwiększony min
         }
 
         try:
@@ -929,7 +938,7 @@ class MainWindow(tk.Tk):
                 w_data = max(w_data, font_data.measure(str(val)) + 18)
 
             width = max(min_widths.get(col, 60),
-                        min(max(w_header, w_data), default_max.get(col, 300)))
+                        min(max(w_header, w_data), default_max.get(col, 300)))  # Zwiększony globalny limit
 
             tv.heading(col, anchor='center')
             tv.column(col, width=int(width), stretch=False, anchor='center')
@@ -1174,8 +1183,21 @@ class MainWindow(tk.Tk):
                 pass
 
     def open_edit_dialog(self, employee_data):
+        # Zapisz stare dane przed edycją
+        old_data = list(employee_data)  # Kopia
         dialog = EmployeeDialog(self, self.emp_manager, employee_data=employee_data)
         self.wait_window(dialog)
+        
+        # Po edycji: sprawdź, czy dane się zmieniły, i dodaj do undo
+        try:
+            new_data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (old_data[0],))
+            if new_data and tuple(new_data) != tuple(old_data):  # POPRAWKA: tuple() dla porównania
+                self.push_undo_action('edit', f"Edycja pracownika {old_data[1]} {old_data[2]} (ID: {old_data[0]})", 
+                                      data=new_data, old_data=old_data)
+                print(f"DEBUG: Dodano push edit dla ID {old_data[0]}")
+        except Exception as e:
+            print(f"DEBUG Błąd push edit: {e}")
+        
         self.refresh_employee_list()
         self.apply_filters()
 
@@ -1500,9 +1522,15 @@ class MainWindow(tk.Tk):
             messagebox.showerror("Błąd", "Nie udało się zmienić statusu.")
 
     def delete_employee_action(self, emp_id):
+        # Zapisz dane przed usunięciem
+        emp_data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (emp_id,))
         if messagebox.askyesno("Potwierdzenie", "Czy na pewno chcesz usunąć tego pracownika?"):
             if self.emp_manager.delete_employee(emp_id):
                 self._log_history_emp("Usunięcie pracownika", "Usunięto pracownika z bazy", emp_id)
+                # Dodaj do undo
+                if emp_data:
+                    self.push_undo_action('delete', f"Usunięcie pracownika {emp_data[1]} {emp_data[2]} (ID: {emp_id})", data=emp_data)
+                    print(f"DEBUG: Dodano push delete dla ID {emp_id}")
                 messagebox.showinfo("Sukces", "Pracownik usunięty.")
                 self.refresh_employee_list()
                 self.apply_filters()
@@ -1510,18 +1538,43 @@ class MainWindow(tk.Tk):
                 messagebox.showerror("Błąd", "Nie udało się usunąć pracownika.")
 
     # ---------------- INNE OKNA ----------------
-    # ZMIANA: Dodano obsługę duplikatów po dodaniu
     def open_add_employee_dialog(self):
+        # POPRAWKA: Zapisz liczbę rekordów przed dialogiem
+        old_count = len(self.emp_manager.get_all_employees())
+        print(f"DEBUG: Przed dodaniem – liczba rekordów: {old_count}")
+        
         dialog = EmployeeDialog(self, self.emp_manager)
         self.wait_window(dialog)
         
-        # NOWOŚĆ: Sprawdź duplikaty po dodaniu
+        # Sprawdź duplikaty po dodaniu
         self._check_for_duplicates_after_add()
+        
+        # POPRAWKA: Sprawdź, czy liczba wzrosła – jeśli tak, push nowy rekord do undo
+        try:
+            new_count = len(self.emp_manager.get_all_employees())
+            print(f"DEBUG: Po dodaniu – liczba rekordów: {new_count}")
+            if new_count > old_count:
+                # Znajdź nowy rekord (ostatni ID)
+                last_id_result = self.db_manager.fetch_one("SELECT MAX(id) as last_id FROM employees")
+                new_emp_id = last_id_result[0] if last_id_result else None
+                if new_emp_id:
+                    emp_data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (new_emp_id,))
+                    if emp_data:
+                        self.push_undo_action('add', f"Dodanie pracownika {emp_data[1]} {emp_data[2]} (ID: {new_emp_id})", data=emp_data)
+                        print(f"DEBUG: DODANO PUSH UNDO dla ID {new_emp_id} – stos: {len(self.undo_stack)}")
+                    else:
+                        print("DEBUG: Nie znaleziono danych nowego rekordu")
+                else:
+                    print("DEBUG: Nie znaleziono nowego ID")
+            else:
+                print("DEBUG: Liczba rekordów nie wzrosła – brak push do undo")
+        except Exception as e:
+            print(f"DEBUG BŁĄD push add: {e}")
         
         self.refresh_employee_list()
         self.apply_filters()
 
-    # NOWOŚĆ: Funkcja sprawdzająca duplikaty po dodaniu
+    # Funkcja sprawdzająca duplikaty po dodaniu
     def _check_for_duplicates_after_add(self):
         try:
             # Pobierz ID nowo dodanego (ostatni rekord)
@@ -1721,6 +1774,88 @@ class MainWindow(tk.Tk):
             except Exception:
                 pass
             self.destroy()
+
+    # ---------------- NOWOŚĆ: SYSTEM UNDO ----------------
+    # Dodaj akcję do stosu undo
+    def push_undo_action(self, action_type, description, data=None, old_data=None):
+        action = {
+            'type': action_type,  # 'add', 'edit', 'delete'
+            'description': description,  # Np. "Dodanie pracownika Jan Kowalski (ID: 123)"
+            'data': data,  # Aktualne dane (dla add/delete)
+            'old_data': old_data,  # Stare dane (dla edit)
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+        self.undo_stack.append(action)
+        if len(self.undo_stack) > self.undo_max_size:
+            self.undo_stack.pop(0)  # Usuń najstarszą
+        
+        # POPRAWKA: Zawsze aktywuj przycisk, jeśli stos niepusty
+        if hasattr(self, 'undo_button') and self.undo_button['state'] == 'disabled' and len(self.undo_stack) > 0:
+            self.undo_button.config(state='normal')
+        
+        print(f"DEBUG Undo: Dodano '{description}' (stos: {len(self.undo_stack)}, przycisk: {self.undo_button['state']})")
+
+    # Cofnij ostatnią akcję
+    def undo_last_action(self):
+        if not self.undo_stack:
+            messagebox.showinfo("Brak akcji", "Nie ma akcji do cofnięcia.")
+            return
+
+        last_action = self.undo_stack.pop()
+        action_type = last_action['type']
+        description = last_action['description']
+
+        try:
+            if action_type == 'add':
+                # Cofnij dodanie: usuń pracownika po ID
+                emp_id = last_action['data'][0] if last_action['data'] else None
+                if emp_id and self.emp_manager.delete_employee(emp_id):
+                    self._log_history_emp("Cofnięcie dodania", f"Cofnięto dodanie: {description}", emp_id)
+                    messagebox.showinfo("Cofnięto", f"Cofnięto: {description}")
+                    self.refresh_employee_list()
+                    self.apply_filters()
+                else:
+                    messagebox.showerror("Błąd", "Nie udało się cofnąć dodania.")
+
+            elif action_type == 'edit':
+                # Cofnij edycję: przywróć stare dane
+                emp_id = last_action['old_data'][0] if last_action['old_data'] else None
+                if emp_id and last_action['old_data']:
+                    # Użyj update_employee z starymi danymi
+                    if self.emp_manager.update_employee(emp_id, last_action['old_data']):
+                        self._log_history_emp("Cofnięcie edycji", f"Cofnięto edycję: {description}", emp_id)
+                        messagebox.showinfo("Cofnięto", f"Cofnięto: {description}")
+                        self.refresh_employee_list()
+                        self.apply_filters()
+                    else:
+                        messagebox.showerror("Błąd", "Nie udało się cofnąć edycji.")
+                else:
+                    messagebox.showerror("Błąd", "Brak danych do przywrócenia.")
+
+            elif action_type == 'delete':
+                # Cofnij usunięcie: dodaj z powrotem
+                if last_action['data']:
+                    if self.emp_manager.add_employee(last_action['data']):
+                        emp_id = last_action['data'][0] if last_action['data'] else None
+                        self._log_history_emp("Cofnięcie usunięcia", f"Cofnięto usunięcie: {description}", emp_id)
+                        messagebox.showinfo("Cofnięto", f"Cofnięto: {description}")
+                        self.refresh_employee_list()
+                        self.apply_filters()
+                    else:
+                        messagebox.showerror("Błąd", "Nie udało się cofnąć usunięcia.")
+                else:
+                    messagebox.showerror("Błąd", "Brak danych do przywrócenia.")
+
+            # Deaktywuj przycisk, jeśli stos pusty
+            if not self.undo_stack:
+                if hasattr(self, 'undo_button'):
+                    self.undo_button.config(state='disabled')
+            print(f"DEBUG Undo: Cofnięto '{description}' (pozostało: {len(self.undo_stack)}, przycisk: {self.undo_button['state']})")
+
+        except Exception as e:
+            messagebox.showerror("Błąd cofania", f"Nie udało się cofnąć akcji: {e}")
+            # Przywróć akcję do stosu na błąd
+            self.undo_stack.append(last_action)
 
 
 if __name__ == "__main__":
