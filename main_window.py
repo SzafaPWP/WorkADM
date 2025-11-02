@@ -237,8 +237,15 @@ class MainWindow(tk.Tk):
         toolbar.grid(row=0, column=0, sticky="ew", pady=(0, 8))
 
         ttk.Button(toolbar, text="🔄 Odśwież", command=self.refresh_duplicates_tab, width=12).pack(side='left', padx=2)
-        ttk.Button(toolbar, text="✏️ Edytuj zaznaczonych", command=self.edit_selected_duplicates, width=18).pack(side='left', padx=2)
-        ttk.Button(toolbar, text="🗑️ Usuń zaznaczonych", command=self.delete_selected_duplicates, width=18).pack(side='left', padx=2)
+        ttk.Button(toolbar, text="✏️ Edytuj zaznaczone", command=self.edit_selected_duplicates, width=24).pack(side='left', padx=2)
+        ttk.Button(toolbar, text="🗑️ Usuń zaznaczone", command=self.delete_selected_duplicates, width=24).pack(side='left', padx=2)
+        
+        # NOWOŚĆ: Przycisk "Usuń wszystkie duplikaty"
+        ttk.Button(toolbar, text="🗑️ Usuń wszystkie duplikaty", command=self.delete_all_duplicates_dialog, width=28).pack(side='left', padx=2)
+
+        # NOWOŚĆ: Label z liczbą duplikatów
+        self.duplicates_count_label = ttk.Label(toolbar, text="Znaleziono 0 grup duplikatów", font=('Arial', 9))
+        self.duplicates_count_label.pack(side='right', padx=10)
 
         # Treeview dla duplikatów (hierarchiczne)
         dup_list_frame = ttk.Frame(self.duplicates_frame)
@@ -278,7 +285,7 @@ class MainWindow(tk.Tk):
         # Odśwież na starcie
         self.refresh_duplicates_tab()
 
-    # NOWOŚĆ: Odświeżanie zakładki Duplikaty
+    # NOWOŚĆ: Odświeżanie zakładki Duplikaty (z licznikiem)
     def refresh_duplicates_tab(self):
         for item in self.duplicates_tree.get_children():
             self.duplicates_tree.delete(item)
@@ -290,6 +297,11 @@ class MainWindow(tk.Tk):
             groups[key].append(emp)
 
         dupe_groups = {k: v for k, v in groups.items() if len(v) > 1}
+        
+        # NOWOŚĆ: Aktualizuj licznik
+        num_groups = len(dupe_groups)
+        total_duplicates = sum(len(emps) - 1 for emps in dupe_groups.values())  # Liczba duplikatów do usunięcia
+        self.duplicates_count_label.config(text=f"Znaleziono {num_groups} grup duplikatów ({total_duplicates} duplikatów)")
 
         if not dupe_groups:
             self.duplicates_tree.insert('', 'end', text="Brak duplikatów", values=('', '', '', '', '', '', '', ''))
@@ -309,7 +321,66 @@ class MainWindow(tk.Tk):
         # Tagi dla stylizacji (opcjonalnie, np. grupy na czerwono)
         self.duplicates_tree.tag_configure('group', background='#FFE6E6')  # Lekko czerwony dla grup
 
-    # NOWOŚĆ: Edytuj zaznaczonych duplikatów
+    # NOWOŚĆ: Dialog wyboru dla "Usuń wszystkie duplikaty"
+    def delete_all_duplicates_dialog(self):
+        if not self.duplicates_count_label.cget('text').startswith('Znaleziono 0'):
+            dialog = tk.Toplevel(self)
+            dialog.title("Usuń wszystkie duplikaty")
+            dialog.geometry("300x150")
+            dialog.transient(self)
+            dialog.grab_set()
+
+            tk.Label(dialog, text="Wybierz, które wpisy usunąć:", font=('Arial', 10, 'bold')).pack(pady=10)
+
+            keep_var = tk.StringVar(value="older")
+            ttk.Radiobutton(dialog, text="Usuń nowsze wpisy (zostaw starsze)", variable=keep_var, value="older").pack(pady=2)
+            ttk.Radiobutton(dialog, text="Usuń starsze wpisy (zostaw nowsze)", variable=keep_var, value="newer").pack(pady=2)
+
+            def confirm_delete():
+                keep_older = (keep_var.get() == "older")
+                dialog.destroy()
+                self.delete_all_duplicates(keep_older)
+
+            ttk.Button(dialog, text="Potwierdź i usuń", command=confirm_delete).pack(pady=10)
+        else:
+            messagebox.showinfo("Brak duplikatów", "Nie znaleziono duplikatów do usunięcia.")
+
+    # NOWOŚĆ: Usuń wszystkie duplikaty (z opcją starsze/nowsze)
+    def delete_all_duplicates(self, keep_older=True):
+        all_emps = self.emp_manager.get_all_employees() or []
+        groups = defaultdict(list)
+        for emp in all_emps:
+            key = (str(emp[1]).lower().strip(), str(emp[2]).lower().strip())
+            groups[key].append(emp)
+
+        dupe_groups = {k: v for k, v in groups.items() if len(v) > 1}
+        if not dupe_groups:
+            messagebox.showinfo("Brak duplikatów", "Nie znaleziono duplikatów do usunięcia.")
+            return
+
+        deleted_count = 0
+        groups_count = len(dupe_groups)
+        for key, emps in dupe_groups.items():
+            # Sortuj po ID (niższe = starsze)
+            emps_sorted = sorted(emps, key=lambda e: e[0])  # Sort po ID
+            if keep_older:
+                to_keep = emps_sorted[0]  # Najstarszy (najniższe ID)
+                to_delete = emps_sorted[1:]
+            else:
+                to_keep = emps_sorted[-1]  # Najnowszy (najwyższe ID)
+                to_delete = emps_sorted[:-1]
+
+            for emp in to_delete:
+                emp_id = emp[0]
+                if self.emp_manager.delete_employee(emp_id):
+                    self._log_history_emp("Usunięcie duplikatu (wszystkie)", f"Usunięto duplikat ID {emp_id} (zostawiono ID {to_keep[0]})", emp_id)
+                    deleted_count += 1
+
+        messagebox.showinfo("Sukces", f"Usunięto {deleted_count} duplikatów z {groups_count} grup.\n(Zostawiono {'starsze' if keep_older else 'nowsze'} wpisy).")
+        self.refresh_employee_list()
+        self.refresh_duplicates_tab()
+
+    # ZMIANA: Edytuj zaznaczonych duplikatów (poprawka na brak metody get_employee_by_id)
     def edit_selected_duplicates(self):
         selected = self.duplicates_tree.selection()
         if not selected:
@@ -322,19 +393,28 @@ class MainWindow(tk.Tk):
             if 'record' not in tags:  # Tylko rekordy (nie grupy)
                 continue
             values = self.duplicates_tree.item(item, 'values')
-            emp_id = int(values[0])
-            data = self.emp_manager.get_employee_by_id(emp_id)  # Zakładam metodę; jeśli nie, użyj db.fetch_one
+            try:
+                emp_id = int(values[0])  # ID z pierwszej kolumny
+            except (ValueError, IndexError):
+                continue  # Pomijamy, jeśli nie da się sparsować ID
+            
+            # POPRAWKA: Użyj bezpośredniego zapytania do DB zamiast emp_manager.get_employee_by_id
+            data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (emp_id,))
             if data:
                 dialog = EmployeeDialog(self, self.emp_manager, employee_data=data)
                 self.wait_window(dialog)
                 edited_count += 1
+            else:
+                print(f"Nie znaleziono danych dla ID {emp_id}")  # Debug: usuń po teście
 
         if edited_count > 0:
-            messagebox.showinfo("Sukces", f"Edytowano {edited_count} rekordów.")
+            messagebox.showinfo("Sukces", f"Otwarto edycję dla {edited_count} rekordów.")
             self.refresh_employee_list()  # Odśwież główną listę i duplikaty
             self.refresh_duplicates_tab()
+        else:
+            messagebox.showwarning("Brak edycji", "Nie udało się otworzyć edycji dla zaznaczonych rekordów.")
 
-    # NOWOŚĆ: Usuń zaznaczonych duplikatów
+    # ZMIANA: Usuń zaznaczonych duplikatów
     def delete_selected_duplicates(self):
         selected = self.duplicates_tree.selection()
         if not selected:
@@ -347,7 +427,14 @@ class MainWindow(tk.Tk):
             if 'record' not in tags:
                 continue
             values = self.duplicates_tree.item(item, 'values')
-            emp_ids.append(int(values[0]))
+            try:
+                emp_ids.append(int(values[0]))
+            except (ValueError, IndexError):
+                continue
+
+        if not emp_ids:
+            messagebox.showwarning("Brak rekordów", "Zaznacz tylko rekordy (nie grupy).")
+            return
 
         if not messagebox.askyesno("Potwierdzenie", f"Usunąć {len(emp_ids)} zaznaczonych duplikatów?"):
             return
@@ -362,19 +449,26 @@ class MainWindow(tk.Tk):
         self.refresh_employee_list()
         self.refresh_duplicates_tab()
 
-    # NOWOŚĆ: Double-click na duplikacie (edytuj)
+    # ZMIANA: Double-click na duplikacie (edytuj) – poprawka na brak metody get_employee_by_id
     def on_double_click_duplicate(self, event):
         item = self.duplicates_tree.identify_row(event.y)
         if not item:
             return
         tags = self.duplicates_tree.item(item, 'tags')
         if 'record' not in tags:
-            return
+            return  # Tylko rekordy, nie grupy
         values = self.duplicates_tree.item(item, 'values')
-        emp_id = int(values[0])
-        data = self.emp_manager.get_employee_by_id(emp_id)
+        try:
+            emp_id = int(values[0])  # ID z pierwszej kolumny
+        except (ValueError, IndexError):
+            return
+        
+        # POPRAWKA: Użyj bezpośredniego zapytania do DB
+        data = self.db_manager.fetch_one("SELECT * FROM employees WHERE id=?", (emp_id,))
         if data:
             self.open_edit_dialog(data)
+        else:
+            messagebox.showerror("Błąd", f"Nie znaleziono danych pracownika o ID {emp_id}.")
 
     # NOWOŚĆ: Zmiana zaznaczenia w duplikatach (opcjonalnie, np. do podglądu)
     def on_duplicates_selection_change(self, event):
@@ -412,13 +506,13 @@ class MainWindow(tk.Tk):
         group_menu.menu.add_command(label="🗑️ Usuń Zaznaczonych", command=self.bulk_delete_employees)
 
         ttk.Button(actions_frame, text="📊 Podsumowanie",
-                   command=self.show_summary, width=15).pack(side='left', padx=2)
+                   command=self.show_summary, width=18).pack(side='left', padx=2)
         ttk.Button(actions_frame, text="📋 Historia",
                    command=self.show_history, width=12).pack(side='left', padx=2)
 
         # Przełącznik bocznego podglądu historii
         ttk.Button(actions_frame, text="🕘 Podgląd historii",
-                   command=self.toggle_side_history, width=16).pack(side='left', padx=2)
+                   command=self.toggle_side_history, width=17).pack(side='left', padx=2)
 
         ttk.Button(actions_frame, text="🎨 Kolory",
                    command=self.show_color_editor, width=12).pack(side='left', padx=2)
@@ -533,7 +627,7 @@ class MainWindow(tk.Tk):
 
         header = ttk.Frame(side)
         header.pack(fill='x', padx=6, pady=(6, 4))
-        ttk.Label(header, text="📋 Historia (podgląd)", font=('Arial', 10, 'bold')).pack(side='left')
+        ttk.Label(header, text="📋 Historia (zmian każdego pracownika", font=('Arial', 10, 'bold')).pack(side='left')
 
         cols = ('Czas', 'Akcja', 'Szczegóły')
         self.history_tree = ttk.Treeview(side, columns=cols, show='headings', height=12)
