@@ -487,6 +487,10 @@ class SettingsWindow(tk.Toplevel):
         self.refresh_shifts_list()
         if hasattr(self.master, 'update_dynamic_filters'):
             self.master.update_dynamic_filters()
+        # 🔄 odśwież listę pracowników w oknie głównym
+        if hasattr(self.master, 'refresh_employee_list'):
+            self.master.refresh_employee_list()
+
 
     def delete_shift(self):
         sel = self.shifts_tree.selection()

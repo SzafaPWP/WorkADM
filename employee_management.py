@@ -28,6 +28,14 @@ class EmployeeManagement:
             self.db.execute_query("""
                 INSERT INTO employees (imie, nazwisko, stanowisko, wydzial, zmiana, status, maszyna)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
+
+            emp_id = self.db.fetch_one('SELECT last_insert_rowid()')
+            try:
+                real_id = emp_id[0] if emp_id else None
+                if real_id:
+                    self.log_employee_action(real_id, 'Dodanie Pracownika', f'Dodano pracownika: {imie} {nazwisko}')
+            except Exception:
+                pass
             """, (imie, nazwisko, stanowisko, wydzial, zmiana, status, maszyna))
             self.log_history("Dodanie Pracownika", f"Dodano pracownika: {imie} {nazwisko}")
             return {'success': True, 'overflow': False}
@@ -61,6 +69,10 @@ class EmployeeManagement:
 
             details = f"Zmieniono dane pracownika ID {emp_id}: {old_emp[1]} {old_emp[2]}"
             self.log_history("Edycja Pracownika", details)
+            try:
+                self.log_employee_action(emp_id, 'Edycja Pracownika', details)
+            except Exception:
+                pass
             return {'success': True, 'overflow': False}
         except Exception as e:
             print(f"Błąd aktualizacji pracownika: {e}")
@@ -72,6 +84,10 @@ class EmployeeManagement:
             self.db.execute_query("DELETE FROM employees WHERE id=?", (emp_id,))
             if emp_name:
                 self.log_history("Usunięcie Pracownika", f"Usunięto pracownika: {emp_name[0]} {emp_name[1]}")
+            try:
+                self.log_employee_action(emp_id, 'Usunięcie Pracownika', f'Usunięto pracownika: {emp_name[0]} {emp_name[1]}')
+            except Exception:
+                pass
             return True
         except Exception as e:
             print(f"Błąd usuwania pracownika: {e}")
@@ -469,3 +485,14 @@ class EmployeeManagement:
         except Exception as e:
             print(f"Błąd pobierania L4: {e}")
             return None
+    def log_employee_action(self, emp_id, action, details):
+        operator = self.current_user.get('username', 'SYSTEM') if getattr(self, 'current_user', None) else 'SYSTEM'
+        try:
+            self.db.execute_query("""INSERT INTO history (operator, action, details) VALUES (?, ?, ?)""", (operator, action, details))
+        except Exception:
+            pass
+        try:
+            self.db.execute_query("""INSERT INTO employee_history (employee_id, operator, action, details) VALUES (?, ?, ?, ?)""", (emp_id, operator, action, details))
+        except Exception:
+            pass
+
