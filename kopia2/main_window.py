@@ -1702,7 +1702,7 @@ class MainWindow(tk.Tk):
                 emp_id, imie, nazwisko, stanowisko, wydzial, zmiana, status, maszyna = emp
                 export_data.append({
                     "ID": emp_id, "Imię": imie, "Nazwisko": nazwisko,
-                    "Stanowisko": stanowisko, "Wydział": wydzial, "Zmiana": self.emp_manager.get_shift_full_name(zmiana),
+                    "Stanowisko": stanowisko, "Wydział": wydzial, "Zmiana": zmiana,
                     "Status": status, "Maszyna/Urządzenie": maszyna,
                     "Urlop od-do": vacation_map.get(emp_id, ""),
                     "L4 od-do": l4_map.get(emp_id, "")

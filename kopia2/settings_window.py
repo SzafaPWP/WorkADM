@@ -476,7 +476,7 @@ class SettingsWindow(tk.Toplevel):
             self.master.update_dynamic_filters()
         try:
             # Globalna zmiana statusów po zapisie godzin
-            self.emp_manager.apply_statuses_from_shifts()
+            self.emp_manager.apply_statuses_from_shifts(skip_absences=self.skip_absences_var.get())
             if hasattr(self.master, 'refresh_employee_list'):
                 self.master.refresh_employee_list()
         except Exception as _e:
