@@ -621,7 +621,7 @@ class SummaryWindow(tk.Toplevel):
             for emp in self.filtered_data:
                 export_data.append({
                     "ID": emp[0], "Imię": emp[1], "Nazwisko": emp[2],
-                    "Stanowisko": emp[3], "Wydział": emp[4], "Zmiana": self.emp_manager.get_shift_full_name(emp[5]),
+                    "Stanowisko": emp[3], "Wydział": emp[4], "Zmiana": emp[5],
                     "Status": emp[6], "Maszyna": emp[7]
                 })
             

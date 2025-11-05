@@ -212,12 +212,26 @@ class SettingsWindow(tk.Toplevel):
         quick_wrapper.grid_columnconfigure(0, weight=1)
         quick_wrapper.grid_columnconfigure(1, weight=0)
         quick_wrapper.grid_columnconfigure(2, weight=1)
+
         quick_container = ttk.Frame(quick_wrapper)
         quick_container.grid(row=0, column=1)  # środek
 
-        # TYLKO szybkie godziny (usunięto szybkie ustawienia A/B/C/D)
+        quick_btn_frame = ttk.LabelFrame(quick_container, text="Szybkie ustawienia zmian", padding="6")
         quick_time_frame = ttk.LabelFrame(quick_container, text="Szybkie godziny", padding="6")
+
+        # obok siebie, blisko
+        quick_btn_frame.pack(side='left', padx=6)
         quick_time_frame.pack(side='left', padx=6)
+
+        # Przyciski w szybkim panelu zmian
+        ttk.Button(quick_btn_frame, text="A (6:00-14:00)",
+                   command=lambda: self.set_quick_shift("A - Rano (6-14)", "06", "00", "14", "00", "#ADD8E6")).pack(fill='x', pady=2)
+        ttk.Button(quick_btn_frame, text="B (14:00-22:00)",
+                   command=lambda: self.set_quick_shift("B - Południe (14-22)", "14", "00", "22", "00", "#F08080")).pack(fill='x', pady=2)
+        ttk.Button(quick_btn_frame, text="C (22:00-06:00)",
+                   command=lambda: self.set_quick_shift("C - Noc (22-6)", "22", "00", "06", "00", "#20B2AA")).pack(fill='x', pady=2)
+        ttk.Button(quick_btn_frame, text="D (Wolne)",
+                   command=lambda: self.set_quick_shift("D - Wolne", "00", "00", "00", "00", "#90EE90")).pack(fill='x', pady=2)
 
         # Przyciski w szybkim panelu godzin
         ttk.Button(quick_time_frame, text="6:00-14:00",
@@ -228,8 +242,6 @@ class SettingsWindow(tk.Toplevel):
                    command=lambda: self.set_quick_time("22", "00", "06", "00")).pack(fill='x', pady=2)
         ttk.Button(quick_time_frame, text="Wolne (0:00-0:00)",
                    command=lambda: self.set_quick_time("00", "00", "00", "00")).pack(fill='x', pady=2)
-
-
 
         # 3) Przyciski akcji – WYŚRODKOWANE pod szybkimi panelami
         button_row = ttk.Frame(form_frame)
@@ -358,6 +370,7 @@ class SettingsWindow(tk.Toplevel):
         messagebox.showinfo("Szczegóły", txt)
 
     # --- funkcje pomocnicze dla zmian ---
+    def set_quick_shift(self, name, start_hour, start_minute, end_hour, end_minute, color):
         self.shift_name_entry.delete(0, tk.END)
         self.shift_name_entry.insert(0, name)
         self.start_hour_var.set(start_hour)
@@ -474,13 +487,6 @@ class SettingsWindow(tk.Toplevel):
         self.refresh_shifts_list()
         if hasattr(self.master, 'update_dynamic_filters'):
             self.master.update_dynamic_filters()
-        try:
-            # Globalna zmiana statusów po zapisie godzin
-            self.emp_manager.apply_statuses_from_shifts()
-            if hasattr(self.master, 'refresh_employee_list'):
-                self.master.refresh_employee_list()
-        except Exception as _e:
-            print('apply_statuses_from_shifts error:', _e)
 
     def delete_shift(self):
         sel = self.shifts_tree.selection()
