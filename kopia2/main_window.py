@@ -1702,7 +1702,7 @@ class MainWindow(tk.Tk):
                 emp_id, imie, nazwisko, stanowisko, wydzial, zmiana, status, maszyna = emp
                 export_data.append({
                     "ID": emp_id, "Imię": imie, "Nazwisko": nazwisko,
-                    "Stanowisko": stanowisko, "Wydział": wydzial, "Zmiana": zmiana,
+                    "Stanowisko": stanowisko, "Wydział": wydzial, "Zmiana": self.emp_manager.get_shift_full_name(zmiana),
                     "Status": status, "Maszyna/Urządzenie": maszyna,
                     "Urlop od-do": vacation_map.get(emp_id, ""),
                     "L4 od-do": l4_map.get(emp_id, "")
@@ -1897,3 +1897,9 @@ class MainWindow(tk.Tk):
 if __name__ == "__main__":
     app = MainWindow()
     app.mainloop()
+    def refresh_employee_list_and_shifts(self):
+        # Odśwież listę i przebuduj kolumnę 'Zmiana' wg nowych godzin
+        try:
+            self.refresh_employee_list()
+        except Exception as e:
+            print("refresh_employee_list error:", e)

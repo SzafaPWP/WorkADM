@@ -1897,3 +1897,9 @@ class MainWindow(tk.Tk):
 if __name__ == "__main__":
     app = MainWindow()
     app.mainloop()
+    def refresh_employee_list_and_shifts(self):
+        # Odśwież listę i przebuduj kolumnę 'Zmiana' wg nowych godzin
+        try:
+            self.refresh_employee_list()
+        except Exception as e:
+            print("refresh_employee_list error:", e)

@@ -15,6 +15,7 @@ class EmployeeDialog(tk.Toplevel):
             self.title("Dodaj Nowego Pracownika")
             
         self.geometry("500x550")
+        self.minsize(760, 560)
         self.transient(master)
         self.grab_set()
         
@@ -35,7 +36,7 @@ class EmployeeDialog(tk.Toplevel):
         
         # Imię
         ttk.Label(main_frame, text="Imię:*").grid(row=0, column=0, sticky="w", pady=5)
-        self.imie_entry = ttk.Entry(main_frame, width=30)
+        self.imie_entry = ttk.Entry(main_frame, width=820)
         self.imie_entry.grid(row=0, column=1, sticky="ew", pady=5, padx=(10, 0))
         
         # Nazwisko
@@ -86,14 +87,18 @@ class EmployeeDialog(tk.Toplevel):
                                        values=[s[0] for s in self.emp_manager.get_statuses_config()],
                                        state="readonly")
         self.status_combo.grid(row=5, column=1, sticky="ew", pady=5, padx=(10, 0))
+        # Przełącznik: nie nadpisuj statusu przy Urlop/L4 (pod polem Status)
+        self.protect_absence_status_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(main_frame, text="Nie nadpisuj statusu przy Urlop/L4",
+                        variable=self.protect_absence_status_var).grid(row=6, column=1, columnspan=2, sticky='w', padx=(10,0), pady=(0,4))
         
         # Maszyna/Urządzenie
-        ttk.Label(main_frame, text="Maszyna/Urządzenie:").grid(row=6, column=0, sticky="w", pady=5)
+        ttk.Label(main_frame, text="Maszyna/Urządzenie:").grid(row=7, column=0, sticky="w", pady=5)
         self.maszyna_var = tk.StringVar()
         self.maszyna_combo = ttk.Combobox(main_frame, textvariable=self.maszyna_var,
                                         values=self.emp_manager.get_setting('maszyny'),
                                         state="readonly")
-        self.maszyna_combo.grid(row=6, column=1, sticky="ew", pady=5, padx=(10, 0))
+        self.maszyna_combo.grid(row=7, column=1, sticky="ew", pady=5, padx=(10, 0))
         
         # Sekcja zarządzania urlopami i L4 (tylko dla edycji)
         if self.employee_data:
@@ -102,15 +107,15 @@ class EmployeeDialog(tk.Toplevel):
         # Przyciski
         button_frame = ttk.Frame(main_frame)
         if self.employee_data:
-            button_frame.grid(row=9, column=0, columnspan=2, pady=20)
+            button_frame.grid(row=10, column=0, columnspan=2, pady=20)
         else:
-            button_frame.grid(row=7, column=0, columnspan=2, pady=20)
+            button_frame.grid(row=8, column=0, columnspan=2, pady=20)
         
         ttk.Button(button_frame, text="Zapisz", command=self.save_employee, 
                   style='Accent.TButton').pack(side="left", padx=5)
         ttk.Button(button_frame, text="Anuluj", command=self.destroy).pack(side="left", padx=5)
         
-        main_frame.grid_columnconfigure(1, weight=1)
+        main_frame.grid_columnconfigure( 1, weight=  1)
         
         # Wypełnij danymi jeśli edycja
         if self.employee_data:
@@ -126,11 +131,36 @@ class EmployeeDialog(tk.Toplevel):
                 self.shift_desc_label.config(text="")
         else:
             self.shift_desc_label.config(text="")
+        self._auto_status_from_current_shift()
+    def _auto_status_from_current_shift(self):
+        letter = (self.zmiana_var.get() or '').strip()
+        if not letter:
+            return
+        try:
+            cfg = {row[0]: (row[1], row[2]) for row in self.emp_manager.get_shifts_config()}
+            if letter in cfg:
+                st, en = cfg[letter]
+                st = (st or '00:00')[:5]; en = (en or '00:00')[:5]
+                desired = 'Wolne' if (st=='00:00' and en=='00:00') else 'W Pracy'
+                # Szanuj ochronę Urlop/L4 jeśli jest i włączona
+                if getattr(self,'protect_absence_status_var',None) and self.protect_absence_status_var.get():
+                    try:
+                        has_vac = self.emp_manager.get_active_vacation(self.emp_id)
+                        has_l4 = self.emp_manager.get_active_l4(self.emp_id)
+                        if has_vac or has_l4:
+                            return
+                    except Exception:
+                        pass
+                self.status_var.set(desired)
+        except Exception:
+            pass
+
+
 
     def create_vacation_l4_section(self, main_frame):
         """Tworzy sekcję do zarządzania urlopami i L4"""
         management_frame = ttk.LabelFrame(main_frame, text="Zarządzanie urlopami i L4", padding="10")
-        management_frame.grid(row=7, column=0, columnspan=2, sticky="ew", pady=10)
+        management_frame.grid(row=8, column=0, columnspan=2, sticky="ew", pady=10)
         
         # Pobierz aktualne dane o urlopach i L4
         self.current_vacation = self.emp_manager.get_active_vacation(self.emp_id)
@@ -269,6 +299,9 @@ class EmployeeDialog(tk.Toplevel):
         wydzial = self.wydzial_var.get()
         zmiana = self.zmiana_var.get()  # TYLKO LITERA
         status = self.status_var.get()
+        # Wymuś auto-dopasowanie statusu do wybranej zmiany
+        self._auto_status_from_current_shift()
+        status = self.status_var.get()
         maszyna = self.maszyna_var.get()
 
         # Walidacja
@@ -314,16 +347,3 @@ class EmployeeDialog(tk.Toplevel):
                 messagebox.showerror("Błąd", "Przekroczenie obsady - pracownik nie został zapisany.")
             else:
                 messagebox.showerror("Błąd", "Nie udało się zapisać pracownika.")
-
-    def update_shift_preview(self):
-        try:
-            letter = self.shift_combo.get().strip()
-            full = self.emp_manager.get_shift_full_name(letter)
-            # When full like 'A-06:00-14:00' or 'A- Wolne' show only hours part after arrow
-            if '-' in full:
-                parts = full.split('-',1)[1].strip()
-                self.shift_preview_var.set(f"→ {parts}")
-            else:
-                self.shift_preview_var.set("")
-        except Exception:
-            self.shift_preview_var.set("")

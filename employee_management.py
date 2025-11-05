@@ -521,7 +521,7 @@ class EmployeeManagement:
             print(f"Błąd pobierania L4: {e}")
             return None
 
-    def apply_statuses_from_shifts(self):
+    def apply_statuses_from_shifts(self, skip_absences=False):
         """Ustawia status 'Wolne' dla pracowników ze zmianą, której godziny to 00:00-00:00,
         a 'W Pracy' dla pozostałych (A/B/C/D), globalnie."""
         try:

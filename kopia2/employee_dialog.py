@@ -131,6 +131,31 @@ class EmployeeDialog(tk.Toplevel):
                 self.shift_desc_label.config(text="")
         else:
             self.shift_desc_label.config(text="")
+        self._auto_status_from_current_shift()
+    def _auto_status_from_current_shift(self):
+        letter = (self.zmiana_var.get() or '').strip()
+        if not letter:
+            return
+        try:
+            cfg = {row[0]: (row[1], row[2]) for row in self.emp_manager.get_shifts_config()}
+            if letter in cfg:
+                st, en = cfg[letter]
+                st = (st or '00:00')[:5]; en = (en or '00:00')[:5]
+                desired = 'Wolne' if (st=='00:00' and en=='00:00') else 'W Pracy'
+                # Szanuj ochronę Urlop/L4 jeśli jest i włączona
+                if getattr(self,'protect_absence_status_var',None) and self.protect_absence_status_var.get():
+                    try:
+                        has_vac = self.emp_manager.get_active_vacation(self.emp_id)
+                        has_l4 = self.emp_manager.get_active_l4(self.emp_id)
+                        if has_vac or has_l4:
+                            return
+                    except Exception:
+                        pass
+                self.status_var.set(desired)
+        except Exception:
+            pass
+
+
 
     def create_vacation_l4_section(self, main_frame):
         """Tworzy sekcję do zarządzania urlopami i L4"""
@@ -273,6 +298,9 @@ class EmployeeDialog(tk.Toplevel):
         stanowisko = self.stanowisko_var.get()
         wydzial = self.wydzial_var.get()
         zmiana = self.zmiana_var.get()  # TYLKO LITERA
+        status = self.status_var.get()
+        # Wymuś auto-dopasowanie statusu do wybranej zmiany
+        self._auto_status_from_current_shift()
         status = self.status_var.get()
         maszyna = self.maszyna_var.get()
 

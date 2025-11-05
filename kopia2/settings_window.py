@@ -163,6 +163,10 @@ class SettingsWindow(tk.Toplevel):
         # Dół: formularz + szybkie panele WYŚRODKOWANE, a pod nimi przyciski WYŚRODKOWANE
         form_frame = ttk.LabelFrame(frame, text="Dodaj/Edytuj Zmianę", padding="10")
         form_frame.pack(fill='x', pady=(8, 0))
+        # Checkbox: nie nadpisuj statusów przy aktywnym Urlop/L4
+        self.skip_absences_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(form_frame, text="Nie nadpisuj statusów przy aktywnym Urlop/L4",
+                        variable=self.skip_absences_var).pack(anchor='w', pady=(0,6))
 
         # 1) Pola formularza (lewa część)
         fields = ttk.Frame(form_frame)
@@ -212,26 +216,23 @@ class SettingsWindow(tk.Toplevel):
         quick_wrapper.grid_columnconfigure(0, weight=1)
         quick_wrapper.grid_columnconfigure(1, weight=0)
         quick_wrapper.grid_columnconfigure(2, weight=1)
+
         quick_container = ttk.Frame(quick_wrapper)
         quick_container.grid(row=0, column=1)  # środek
 
-        # TYLKO szybkie godziny (usunięto szybkie ustawienia A/B/C/D)
+        # Tylko szybkie godziny (brak A/B/C/D)
         quick_time_frame = ttk.LabelFrame(quick_container, text="Szybkie godziny", padding="6")
         quick_time_frame.pack(side='left', padx=6)
-
-        # Przyciski w szybkim panelu godzin
         ttk.Button(quick_time_frame, text="6:00-14:00",
-                   command=lambda: self.set_quick_time("06", "00", "14", "00")).pack(fill='x', pady=2)
+                   command=lambda: self.set_quick_time("06", "00", "14", "00")).pack(side='left', padx=4, pady=2)
         ttk.Button(quick_time_frame, text="14:00-22:00",
-                   command=lambda: self.set_quick_time("14", "00", "22", "00")).pack(fill='x', pady=2)
+                   command=lambda: self.set_quick_time("14", "00", "22", "00")).pack(side='left', padx=4, pady=2)
         ttk.Button(quick_time_frame, text="22:00-6:00",
-                   command=lambda: self.set_quick_time("22", "00", "06", "00")).pack(fill='x', pady=2)
+                   command=lambda: self.set_quick_time("22", "00", "06", "00")).pack(side='left', padx=4, pady=2)
         ttk.Button(quick_time_frame, text="Wolne (0:00-0:00)",
-                   command=lambda: self.set_quick_time("00", "00", "00", "00")).pack(fill='x', pady=2)
+                   command=lambda: self.set_quick_time("00", "00", "00", "00")).pack(side='left', padx=4, pady=2)
 
-
-
-        # 3) Przyciski akcji – WYŚRODKOWANE pod szybkimi panelami
+# 3) Przyciski akcji – WYŚRODKOWANE pod szybkimi panelami
         button_row = ttk.Frame(form_frame)
         button_row.pack(fill='x', pady=(4, 0))
         # środek
@@ -358,6 +359,7 @@ class SettingsWindow(tk.Toplevel):
         messagebox.showinfo("Szczegóły", txt)
 
     # --- funkcje pomocnicze dla zmian ---
+    def set_quick_shift(self, name, start_hour, start_minute, end_hour, end_minute, color):
         self.shift_name_entry.delete(0, tk.END)
         self.shift_name_entry.insert(0, name)
         self.start_hour_var.set(start_hour)
@@ -474,13 +476,15 @@ class SettingsWindow(tk.Toplevel):
         self.refresh_shifts_list()
         if hasattr(self.master, 'update_dynamic_filters'):
             self.master.update_dynamic_filters()
+        # Po zapisie: globalna aktualizacja statusów wg godzin + natychmiastowe odświeżenie widoków
         try:
-            # Globalna zmiana statusów po zapisie godzin
-            self.emp_manager.apply_statuses_from_shifts(skip_absences=self.skip_absences_var.get())
-            if hasattr(self.master, 'refresh_employee_list'):
+            self.emp_manager.apply_statuses_from_shifts(skip_absences=self.skip_absences_var.get() if hasattr(self,'skip_absences_var') else False)
+            if hasattr(self.master, 'refresh_employee_list_and_shifts'):
+                self.master.refresh_employee_list_and_shifts()
+            elif hasattr(self.master, 'refresh_employee_list'):
                 self.master.refresh_employee_list()
         except Exception as _e:
-            print('apply_statuses_from_shifts error:', _e)
+            print('apply_statuses_from_shifts/refresh error:', _e)
 
     def delete_shift(self):
         sel = self.shifts_tree.selection()
@@ -542,10 +546,10 @@ class SettingsWindow(tk.Toplevel):
 
         quick = ttk.LabelFrame(entry_frame, text="Szybkie ustawienia", padding="6")
         quick.grid(row=0, column=2, rowspan=2, padx=10, pady=4, sticky='n')
-        ttk.Button(quick, text="W Pracy", command=lambda: self.set_quick_status("W Pracy", "#3CB371")).pack(fill='x', pady=2)
-        ttk.Button(quick, text="Urlop", command=lambda: self.set_quick_status("Urlop", "#FFA500")).pack(fill='x', pady=2)
-        ttk.Button(quick, text="L4", command=lambda: self.set_quick_status("L4", "#FF4500")).pack(fill='x', pady=2)
-        ttk.Button(quick, text="Wolne", command=lambda: self.set_quick_status("Wolne", "#98FB98")).pack(fill='x', pady=2)
+        ttk.Button(quick, text="W Pracy", command=lambda: self.set_quick_status("W Pracy", "#3CB371")).pack(side='left', padx=4, pady=2)
+        ttk.Button(quick, text="Urlop", command=lambda: self.set_quick_status("Urlop", "#FFA500")).pack(side='left', padx=4, pady=2)
+        ttk.Button(quick, text="L4", command=lambda: self.set_quick_status("L4", "#FF4500")).pack(side='left', padx=4, pady=2)
+        ttk.Button(quick, text="Wolne", command=lambda: self.set_quick_status("Wolne", "#98FB98")).pack(side='left', padx=4, pady=2)
 
         btn = ttk.Frame(entry_frame)
         btn.grid(row=2, column=0, columnspan=3, pady=(8, 0), sticky='w')
