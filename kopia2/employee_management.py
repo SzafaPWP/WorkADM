@@ -507,6 +507,25 @@ class EmployeeManagement:
             print(f"Błąd pobierania urlopu: {e}")
             return None
 
+    
+    def has_active_absence_today(self, emp_id):
+        """Zwraca True, jeśli pracownik ma dziś aktywny Urlop lub L4."""
+        try:
+            today = datetime.datetime.now().date()
+            row = self.db.fetch_one(
+                """
+                SELECT 1 FROM (
+                    SELECT employee_id, start_date, end_date FROM vacations
+                    UNION ALL
+                    SELECT employee_id, start_date, end_date FROM l4_records
+                ) x
+                WHERE x.employee_id = ? AND date(start_date) <= date(?) AND date(end_date) >= date(?)
+                LIMIT 1
+                """, (emp_id, today, today)
+            )
+            return bool(row)
+        except Exception:
+            return False
     def get_active_l4(self, emp_id):
         """Pobiera aktywne L4 pracownika"""
         try:
@@ -522,8 +541,9 @@ class EmployeeManagement:
             return None
 
     def apply_statuses_from_shifts(self, skip_absences=False):
-        """Ustawia status 'Wolne' dla pracowników ze zmianą, której godziny to 00:00-00:00,
-        a 'W Pracy' dla pozostałych (A/B/C/D), globalnie."""
+        """Ustawia status 'Wolne' dla pracowników ze zmianą 00:00–00:00,
+        a 'W Pracy' dla pozostałych (A/B/C/D). Gdy skip_absences=True
+        nie nadpisuje statusu pracowników z aktywnym Urlopem/L4 dziś."""
         try:
             conf = {self.normalize_shift_key(n): (self._hhmm(s), self._hhmm(e))
                     for n, s, e, c in self.get_shifts_config()}
@@ -532,12 +552,90 @@ class EmployeeManagement:
                     continue
                 start, end = conf[key]
                 if start == '00:00' and end == '00:00':
-                    # Wolne
-                    self.db.execute_query("UPDATE employees SET status='Wolne' WHERE zmiana=?", (key,))
+                    if skip_absences:
+                        self.db.execute_query(
+                            """UPDATE employees
+                                   SET status='Wolne'
+                                   WHERE zmiana=?
+                                     AND id NOT IN (
+                                         SELECT employee_id FROM vacations WHERE date(start_date) <= date('now') AND date(end_date) >= date('now')
+                                         UNION
+                                         SELECT employee_id FROM l4_records WHERE date(start_date) <= date('now') AND date(end_date) >= date('now')
+                                     )""", (key,))
+                    else:
+                        self.db.execute_query("UPDATE employees SET status='Wolne' WHERE zmiana=?", (key,))
                 else:
-                    # W Pracy
-                    self.db.execute_query("UPDATE employees SET status='W Pracy' WHERE zmiana=?", (key,))
-            # zaloguj
+                    if skip_absences:
+                        self.db.execute_query(
+                            """UPDATE employees
+                                   SET status='W Pracy'
+                                   WHERE zmiana=?
+                                     AND id NOT IN (
+                                         SELECT employee_id FROM vacations WHERE date(start_date) <= date('now') AND date(end_date) >= date('now')
+                                         UNION
+                                         SELECT employee_id FROM l4_records WHERE date(start_date) <= date('now') AND date(end_date) >= date('now')
+                                     )""", (key,))
+                    else:
+                        self.db.execute_query("UPDATE employees SET status='W Pracy' WHERE zmiana=?", (key,))
             self.log_history("Aktualizacja statusów", "Statusy zaktualizowane wg ustawień zmian", None)
         except Exception as e:
             print(f"Błąd apply_statuses_from_shifts: {e}")
+    
+
+
+    # --- Absencje aktywne lub przyszłe (>= dziś) ---
+    def get_any_vacation(self, emp_id):
+        """Zwraca aktywny lub najbliższy przyszły urlop pracownika."""
+        try:
+            return self.db.fetch_one(
+                """
+                SELECT id, start_date, end_date, total_days, vacation_type
+                FROM vacations
+                WHERE employee_id = ?
+                  AND date(end_date) >= date('now')
+                ORDER BY date(start_date) ASC
+                LIMIT 1
+                """, (emp_id,)
+            )
+        except Exception as e:
+            print(f"Błąd get_any_vacation: {e}")
+            return None
+
+    def get_any_l4(self, emp_id):
+        """Zwraca aktywne lub najbliższe przyszłe L4 pracownika."""
+        try:
+            return self.db.fetch_one(
+                """
+                SELECT id, start_date, end_date, total_days
+                FROM l4_records
+                WHERE employee_id = ?
+                  AND date(end_date) >= date('now')
+                ORDER BY date(start_date) ASC
+                LIMIT 1
+                """, (emp_id,)
+            )
+        except Exception as e:
+            print(f"Błąd get_any_l4: {e}")
+            return None
+
+
+    def delete_vacation_by_id(self, vacation_id):
+        """Usuwa pojedynczy wpis urlopu po ID."""
+        try:
+            if vacation_id is None:
+                return False
+            self.db.execute_query("DELETE FROM vacations WHERE id=?", (vacation_id,))
+            return True
+        except Exception:
+            return False
+
+    def delete_l4_by_id(self, l4_id):
+        """Usuwa pojedynczy wpis L4 po ID."""
+        try:
+            if l4_id is None:
+                return False
+            self.db.execute_query("DELETE FROM l4_records WHERE id=?", (l4_id,))
+            return True
+        except Exception:
+            return False
+    
