@@ -1,0 +1,26 @@
+employee_dialog.py - Dialog edycji pracownika
+settings_window.py - Okno ustawień
+reports_window.py - Okno raportów
+history_window.py - Okno historii
+summary_window.py - Okno podsumowań
+machine_dialog.py - Dialog wyboru maszyny
+employee_management.py - Zarządzanie pracownikami
+
+
+w ustawieniach mam zakladke zmiany tu ustawiam zmiane i czas jej pracy, wymysl cos zeby prosto i szybko przypisywac dla kazdej zmiany godziny pracy np dla zmiany a , b, c, d w zaleznosci czy w ten dzien jest w pracy bo moze to byc system 4 zmianowy ze trzy zmiany pracuja czwarta ma wolne, jak d ma wolne to pozniej bedzie trzeba zmienic jej na inna godzine, wybor godzin nie wpisujac lecz wybierajac z combox godziny i minuty co 30 min, musi byc od ... do np od 6:00 do 14:00, powieksz okno ustawienia systemu na cala dlugos jak glowny program zeby miescilo sie wszystko, aha i w histori nie zgadza mi sie data wpisow jest pozniej o godzine od zagera komputera, okno historii tez ladnie na srodku na wysokosc programu, okienko logowania przy wlaczeniu programu na srodku ekranu, no i oczywiscie brakuje przycisku wyloguj gdzie mozna sie przelogowac na innego uzytkownika, i brakuje przycisku zamknij wylaczenie programu reszta jest super nie ruszaj bardzo mi sie podoba
+
+czy mam takie zabezpieczenie w programie ze jesli mam ustalona obsade na dany wydzial i daną zmiane i dodam kolejna osobe ponad stan wyskoczy mi informacja ze mam juz obsade czy napewno chce dodac osobe jesli tak do doda mi do systemu liczenia i pokaze w kafelku ?
+
+- Motywy kolorystyczne
+- Układ dashboardu
+- Szablony raportów
+- Filtry zaawansowane
+- Alerty o przekroczeniu wymaganej obsady
+- Absencja chorobowa (L4)
+- Rotacja pracowników (turnover)
+- Obraz obsady w czasie rzeczywistym
+- Alerty o niedoborach kadrowych
+- Sumowanie czasu pracy miesięcznie
+- Rezerwacja urlopów z widokiem miesięcznym
+- Kolizje i dostępność pracowników  
+-na kazdy dzien miesiaca osobna lista pracownikow i nowe obsady

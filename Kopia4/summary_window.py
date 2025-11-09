@@ -1,8 +1,9 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime
-import pandas as pd
-from collections import defaultdict
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
 
 class SummaryWindow(tk.Toplevel):
     def __init__(self, master, emp_manager):
@@ -33,8 +34,44 @@ class SummaryWindow(tk.Toplevel):
         
         self.create_widgets()
         
-        # NOWOŚĆ: Natychmiastowe odświeżenie po otwarciu (bez migania/auto-refresh)
-        self.apply_filters()
+        # Automatyczne odświeżanie co 5 sekund
+        self.auto_refresh_id = None
+        self.auto_refresh_enabled = True
+        self.start_auto_refresh()
+
+    def start_auto_refresh(self):
+        """Uruchamia automatyczne odświeżanie"""
+        if self.auto_refresh_enabled:
+            self.auto_refresh_id = self.after(5000, self.auto_refresh)
+
+    def auto_refresh(self):
+        """Automatyczne odświeżanie danych"""
+        try:
+            if self.auto_refresh_enabled:
+                self.apply_filters()
+                self.auto_refresh_id = self.after(5000, self.auto_refresh)
+        except Exception as e:
+            print(f"Błąd automatycznego odświeżania: {e}")
+            self.auto_refresh_id = self.after(5000, self.auto_refresh)
+
+    def stop_auto_refresh(self):
+        """Zatrzymuje automatyczne odświeżanie"""
+        if self.auto_refresh_id:
+            self.after_cancel(self.auto_refresh_id)
+            self.auto_refresh_id = None
+
+    def toggle_auto_refresh(self):
+        """Przełącza automatyczne odświeżanie"""
+        self.auto_refresh_enabled = not self.auto_refresh_enabled
+        
+        if self.auto_refresh_enabled:
+            self.start_auto_refresh()
+            self.refresh_status.config(text="🟢 Auto-odświeżanie: WŁĄCZONE", foreground='green')
+            self.toggle_refresh_btn.config(text="⏸️ Pauza Auto-odświeżania")
+        else:
+            self.stop_auto_refresh()
+            self.refresh_status.config(text="🔴 Auto-odświeżanie: WYŁĄCZONE", foreground='red')
+            self.toggle_refresh_btn.config(text="▶️ Wznów Auto-odświeżanie")
 
     def create_widgets(self):
         # Główny kontener
@@ -48,8 +85,12 @@ class SummaryWindow(tk.Toplevel):
         ttk.Label(header_frame, text="📊 Zaawansowane Podsumowanie Kadrowe", 
                  font=('Arial', 16, 'bold')).pack(side='left')
         
-        # NOWOŚĆ: Usunięto przycisk auto-refresh
-        ttk.Button(header_frame, text="📤 Eksportuj do Excel",
+        # Status automatycznego odświeżania
+        self.refresh_status = ttk.Label(header_frame, text="🟢 Auto-odświeżanie: WŁĄCZONE", 
+                                       font=('Arial', 9), foreground='green')
+        self.refresh_status.pack(side='right', padx=10)
+        
+        ttk.Button(header_frame, text="📤 Eksportuj do Excel", 
                   command=self.export_summary).pack(side='right', padx=5)
         
         # Sekcja filtrów
@@ -127,7 +168,10 @@ class SummaryWindow(tk.Toplevel):
                   command=self.clear_filters).pack(side='left', padx=5)
         ttk.Button(button_frame, text="📊 Pokaż Wszystkich", 
                   command=self.show_all_employees).pack(side='left', padx=5)
-        # NOWOŚĆ: Usunięto przycisk auto-refresh
+        
+        self.toggle_refresh_btn = ttk.Button(button_frame, text="⏸️ Pauza Auto-odświeżania", 
+                  command=self.toggle_auto_refresh)
+        self.toggle_refresh_btn.pack(side='right', padx=5)
         
         # Ustaw równe rozłożenie kolumn
         for i in range(6):
@@ -251,465 +295,97 @@ class SummaryWindow(tk.Toplevel):
         return tile
 
     def calculate_statistics(self):
-
-
-
-
-
-        """Oblicza statystyki na podstawie przefiltrowanych danych (normalizacja statusu/zmiany)."""
-
-
+        """Oblicza statystyki na podstawie przefiltrowanych danych"""
         stats = {
-
-
             'total': len(self.filtered_data),
-
-
             'working': 0, 'vacation': 0, 'l4': 0, 'free': 0,
-
-
             'shift_a': 0, 'shift_b': 0, 'shift_c': 0, 'shift_d': 0,
-
-
             'total_shifts': 0, 'required_total': 0, 'current_total': 0,
-
-
             'shortage_total': 0, 'overflow_total': 0, 'coverage_percent': 0,
-
-
             'no_position': 0, 'no_machine': 0, 'shortages': [], 'overflows': [], 'alerts': []
-
-
         }
-
-
-
-        def _norm(x): return (x or '').strip()
-
-
-        def _status_key(x): return _norm(x).casefold()
-
-
-        def _is_working(x): return _status_key(x) == 'w pracy'
-
-
-        def _shift_key(z):
-
-
-            z = _norm(z)
-
-
-            return z[:1].upper() if z else ''
-
-
-
-        # 1) Statusy i braki danych (case-insensitive)
-
-
+        
+        # Statystyki statusów
         for emp in self.filtered_data:
-
-
-            status = _status_key(emp[6])
-
-
-            if status == 'w pracy':
-
-
-                stats['working'] += 1
-
-
-            elif status == 'urlop':
-
-
-                stats['vacation'] += 1
-
-
-            elif _norm(emp[6]).upper() == 'L4':
-
-
-                stats['l4'] += 1
-
-
-            elif status == 'wolne':
-
-
-                stats['free'] += 1
-
-
-
-            if not _norm(emp[3]) or _norm(emp[3]) in ('nieustawione', 'brak'):
-
-
-                stats['no_position'] += 1
-
-
-            if not _norm(emp[7]) or _norm(emp[7]) == 'brak':
-
-
-                stats['no_machine'] += 1
-
-
-
-        # 2) Zmiany — licz tylko pracujących; shift po pierwszej literze
-
-
+            status = emp[6]
+            if status == "W Pracy": stats['working'] += 1
+            elif status == "Urlop": stats['vacation'] += 1
+            elif status == "L4": stats['l4'] += 1
+            elif status == "Wolne": stats['free'] += 1
+        
+        # Statystyki zmian
         for emp in self.filtered_data:
-
-
-            if not _is_working(emp[6]):
-
-
-                continue
-
-
-            k = _shift_key(emp[5])
-
-
-            if k == 'A':
-
-
-                stats['shift_a'] += 1
-
-
-            elif k == 'B':
-
-
-                stats['shift_b'] += 1
-
-
-            elif k == 'C':
-
-
-                stats['shift_c'] += 1
-
-
-            elif k == 'D':
-
-
-                stats['shift_d'] += 1
-
-
-
+            zmiana = emp[5]
+            if "A -" in zmiana: stats['shift_a'] += 1
+            elif "B -" in zmiana: stats['shift_b'] += 1
+            elif "C -" in zmiana: stats['shift_c'] += 1
+            elif "D -" in zmiana: stats['shift_d'] += 1
+        
         stats['total_shifts'] = stats['shift_a'] + stats['shift_b'] + stats['shift_c'] + stats['shift_d']
-
-
-
-        # 3) Obsada — wylicz z calculate_staffing_stats, gdy filtr dotyczy wydziału/zmiany
-
-
-        if self.current_filters.get('wydzial') or self.current_filters.get('zmiana'):
-
-
-            try:
-
-
-                stats.update(self.calculate_staffing_stats())
-
-
-            except Exception:
-
-
-                pass
-
-
-
-        return stats
-
-
-
-        def _shift_key(z):
-
-
-            z = (z or '').strip()
-
-
-            return z[:1].upper() if z else ''
-
-
-        # Statystyki statusów i braków danych
-
-
+        
+        # Braki danych
         for emp in self.filtered_data:
-
-
-            status = (emp[6] or '').strip()
-
-
-            if status == "W Pracy":
-
-
-                stats['working'] += 1
-
-
-            elif status == "Urlop":
-
-
-                stats['vacation'] += 1
-
-
-            elif status.upper() == "L4":
-
-
-                stats['l4'] += 1
-
-
-            elif status == "Wolne":
-
-
-                stats['free'] += 1
-
-
-            if not (emp[3] or '').strip() or (emp[3] in ['Nieustawione', 'Brak']):
-
-
+            if not emp[3] or emp[3] in ['', 'Nieustawione', 'Brak']:
                 stats['no_position'] += 1
-
-
-            if not (emp[7] or '').strip() or (emp[7] in ['Brak']):
-
-
+            if not emp[7] or emp[7] in ['', 'Brak']:
                 stats['no_machine'] += 1
-
-
-        # Statystyki zmian — tylko osoby "W Pracy"
-
-
-        for emp in self.filtered_data:
-
-
-            if (emp[6] or '').strip() != "W Pracy":
-
-
-                continue
-
-
-            k = _shift_key(emp[5])
-
-
-            if k == 'A':
-
-
-                stats['shift_a'] += 1
-
-
-            elif k == 'B':
-
-
-                stats['shift_b'] += 1
-
-
-            elif k == 'C':
-
-
-                stats['shift_c'] += 1
-
-
-            elif k == 'D':
-
-
-                stats['shift_d'] += 1
-
-
-        stats['total_shifts'] = stats['shift_a'] + stats['shift_b'] + stats['shift_c'] + stats['shift_d']
-
-
+        
         # Analiza obsady (tylko jeśli jest filtr na wydział/zmianę)
-
-
         if self.current_filters.get('wydzial') or self.current_filters.get('zmiana'):
-
-
             stats.update(self.calculate_staffing_stats())
-
-
+        
         return stats
-
 
     def calculate_staffing_stats(self):
-
-
-
-
-        """Oblicza statystyki związane z obsadą (ten sam klucz status/zmiana co w kafelku ZMIANY)."""
-
-
-
-        from collections import defaultdict
-
-
-
-
-        def _norm(x): return (x or '').strip()
-
-
-
-        def _status_key(x): return _norm(x).casefold()
-
-
-
-        def _is_working(x): return _status_key(x) == 'w pracy'
-
-
-
-        def _shift_key(z):
-
-
-
-            z = _norm(z)
-
-
-
-            return z[:1].upper() if z else ''
-
-
-
-
+        """Oblicza statystyki związane z obsadą"""
         staffing_stats = {
-
-
-
             'required_total': 0, 'current_total': 0, 'shortage_total': 0,
-
-
-
             'overflow_total': 0, 'coverage_percent': 0, 'shortages': [], 'overflows': []
-
-
-
         }
-
-
-
-
-        # Grupuj wg (wydział, litera zmiany) tylko dla pracujących
-
-
-
-        groups = defaultdict(int)
-
-
-
+        
+        # Grupuj według wydziału i zmiany
+        groups = {}
         for emp in self.filtered_data:
-
-
-
-            if _is_working(emp[6]):
-
-
-
-                wydzial = _norm(emp[4])
-
-
-
-                zm_key = _shift_key(emp[5])  # 'A'/'B'/'C'/'D'
-
-
-
-                if wydzial and zm_key:
-
-
-
-                    groups[(wydzial, zm_key)] += 1
-
-
-
-
-        # Policz wymagania i braki/nadmiary
-
-
-
-        for (wydzial, zm_key), count in groups.items():
-
-
-
-            try:
-
-
-
-                required = int(self.emp_manager.get_required_staff_by_wydzial_shift(wydzial, zm_key) or 0)
-
-
-
-            except Exception:
-
-
-
-                required = 0
-
-
-
+            if emp[6] == "W Pracy":  # Tylko pracujący
+                key = (emp[4], emp[5])  # (wydzial, zmiana)
+                if key not in groups:
+                    groups[key] = 0
+                groups[key] += 1
+        
+        # Analizuj każdę grupę
+        for (wydzial, zmiana), count in groups.items():
+            required = self.emp_manager.get_required_staff_by_wydzial_shift(wydzial, zmiana)
             if required > 0:
-
-
-
                 staffing_stats['required_total'] += required
-
-
-
                 staffing_stats['current_total'] += count
-
-
-
+                
                 if count < required:
-
-
-
-                    lack = required - count
-
-
-
-                    staffing_stats['shortage_total'] += lack
-
-
-
-                    staffing_stats['shortages'].append({'wydzial': wydzial, 'zmiana': zm_key, 'required': required, 'current': count, 'shortage': lack})
-
-
-
+                    shortage = required - count
+                    staffing_stats['shortage_total'] += shortage
+                    staffing_stats['shortages'].append({
+                        'wydzial': wydzial, 'zmiana': zmiana,
+                        'required': required, 'current': count, 'shortage': shortage
+                    })
                 elif count > required:
-
-
-
-                    excess = count - required
-
-
-
-                    staffing_stats['overflow_total'] += excess
-
-
-
-                    staffing_stats['overflows'].append({'wydzial': wydzial, 'zmiana': zm_key, 'required': required, 'current': count, 'overflow': excess})
-
-
-
-
-        # Pokrycie %
-
-
-
+                    overflow = count - required
+                    staffing_stats['overflow_total'] += overflow
+                    staffing_stats['overflows'].append({
+                        'wydzial': wydzial, 'zmiana': zmiana,
+                        'required': required, 'current': count, 'overflow': overflow
+                    })
+        
+        # Oblicz procent pokrycia
         if staffing_stats['required_total'] > 0:
-
-
-
-            staffing_stats['coverage_percent'] = round((staffing_stats['current_total'] / staffing_stats['required_total']) * 100, 1)
-
-
-
-
-        # Alerty łączone
-
-
-
+            staffing_stats['coverage_percent'] = round(
+                (staffing_stats['current_total'] / staffing_stats['required_total']) * 100, 1
+            )
+        
         staffing_stats['alerts'] = staffing_stats['shortages'] + staffing_stats['overflows']
-
-
-
-
+        
         return staffing_stats
 
-
-    def apply_filters(self, event=None):
-        """NOWOŚĆ: Natychmiastowe odświeżenie po otwarciu i zmianach (bez auto-refresh)"""
+    def apply_filters(self):
+        """Stosuje filtry i aktualizuje widok"""
         # Zbierz filtry
         filters = {
             'wydzial': self.wydzial_var.get(),
@@ -772,9 +448,12 @@ class SummaryWindow(tk.Toplevel):
 
     def update_display(self):
         """Aktualizuje cały widok"""
-        # Kafelki zawsze widoczne (liczone z self.filtered_data)
-        self.tiles_frame.pack(fill="x", pady=(0, 15))
-        self.create_tiles_section()
+        # Pokazuj/ukryj kafelki tylko jeśli są aktywne filtry
+        if self.current_filters:
+            self.tiles_frame.pack(fill="x", pady=(0, 15))
+            self.create_tiles_section()
+        else:
+            self.tiles_frame.pack_forget()
         
         # Aktualizuj listę pracowników
         self.refresh_employees_list()
@@ -894,15 +573,11 @@ class SummaryWindow(tk.Toplevel):
 
     def open_vacation_dialog(self, employee_data):
         from vacation_dialog import VacationDialog
-        dialog = VacationDialog(self, self.emp_manager, employee_data[0], f"{employee_data[1]} {employee_data[2]}")
-        self.wait_window(dialog)
-        self.apply_filters()
+        VacationDialog(self, self.emp_manager, employee_data[0], f"{employee_data[1]} {employee_data[2]}")
 
     def open_l4_dialog(self, employee_data):
         from l4_dialog import L4Dialog
-        dialog = L4Dialog(self, self.emp_manager, employee_data[0], f"{employee_data[1]} {employee_data[2]}")
-        self.wait_window(dialog)
-        self.apply_filters()
+        L4Dialog(self, self.emp_manager, employee_data[0], f"{employee_data[1]} {employee_data[2]}")
 
     def open_machine_dialog(self, employee_data):
         from machine_dialog import MachineDialog
@@ -992,5 +667,5 @@ class SummaryWindow(tk.Toplevel):
 
     def destroy(self):
         """Zamyka okno i zatrzymuje automatyczne odświeżanie"""
-        # NOWOŚĆ: Usunięto stop_auto_refresh()
+        self.stop_auto_refresh()
         super().destroy()
