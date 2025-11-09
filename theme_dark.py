@@ -21,7 +21,6 @@ def apply_theme(root):
     border = "#1e2428"
     selected = "#0ea5ff20"  # semi transparent
 
-    # General
     try:
         root.configure(bg=bg)
     except Exception:
@@ -56,6 +55,3 @@ def apply_theme(root):
     style.configure("TNotebook", background=bg, borderwidth=0)
     style.configure("TNotebook.Tab", background="#121316", foreground=light, padding=[8,6], font=("Segoe UI", 10))
     style.map("TNotebook.Tab", background=[("selected", "#1a2330")], foreground=[("selected", "#ffffff")])
-
-    # Scrollbars (basic)
-    style.configure("Vertical.TScrollbar", background=panel, troughcolor=panel)
