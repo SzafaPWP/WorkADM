@@ -1,0 +1,46 @@
+
+LICENCJA UŻYTKOWANIA OPROGRAMOWANIA
+WorkADM – System Zarządzania Pracownikami
+Wersja licencji: 1.0
+Data: 2025
+Autor: Wojciech Szafirsztejn
+
+1. Postanowienia ogólne
+Niniejsza Licencja („Licencja”) określa warunki użytkowania oprogramowania komputerowego WorkADM („Oprogramowanie”), stworzonego przez autora Wojciecha Szafirsztejna („Licencjodawca”), i udostępnionego Licencjobiorcy („Użytkownik”) – w tym przypadku [nazwa firmy kupującej, np. Tymbark-MWS Sp. z o.o.].
+Zakupienie Oprogramowania oznacza akceptację poniższych warunków.
+
+2. Zakres licencji
+1. Licencjodawca udziela Licencjobiorcy niewyłącznego, nieprzenoszalnego, bezterminowego prawa do użytkowania Oprogramowania w ramach działalności własnej firmy.
+2. Licencja obejmuje jednorazową instalację i użytkowanie programu w ramach jednej organizacji (jednego podmiotu prawnego).
+3. Oprogramowanie może być zainstalowane i używane na dowolnej liczbie komputerów w strukturze organizacyjnej Licencjobiorcy, o ile jest to niezbędne do celów operacyjnych przedsiębiorstwa.
+4. Licencja nie obejmuje praw do kodu źródłowego, interfejsów, skryptów ani baz danych użytych w Oprogramowaniu, chyba że odrębna umowa stanowi inaczej.
+
+3. Ograniczenia
+Licencjobiorcy nie wolno:
+- Sprzedawać, sublicencjonować, wynajmować, udostępniać ani przekazywać Oprogramowania osobom trzecim.
+- Dokonywać modyfikacji, dekompilacji, inżynierii wstecznej, tłumaczenia lub adaptacji kodu programu.
+- Wykorzystywać Oprogramowania w celach innych niż wewnętrzne potrzeby przedsiębiorstwa.
+- Usuwać informacji o prawach autorskich lub oznaczeń właściciela.
+
+4. Prawa autorskie
+Oprogramowanie WorkADM stanowi własność intelektualną Licencjodawcy i jest chronione przepisami prawa autorskiego (Dz.U. 1994 Nr 24 poz. 83 z późn. zm.) oraz odpowiednimi konwencjami międzynarodowymi.
+Zakup licencji nie przenosi praw autorskich do Oprogramowania.
+
+5. Aktualizacje i wsparcie techniczne
+1. Licencjodawca może, lecz nie ma obowiązku, udostępniać aktualizacje Oprogramowania.
+2. Zakres i okres świadczenia wsparcia technicznego mogą być określone w osobnej umowie serwisowej (SLA).
+
+6. Odpowiedzialność
+1. Oprogramowanie jest dostarczane w stanie „takim, jakie jest” („as is”).
+2. Licencjodawca nie ponosi odpowiedzialności za szkody pośrednie, utracone korzyści lub przerwy w działalności wynikające z używania lub niemożności używania programu.
+3. Odpowiedzialność Licencjodawcy wobec Licencjobiorcy w żadnym wypadku nie przekroczy wartości zapłaconej za licencję.
+
+7. Postanowienia końcowe
+1. Niniejsza licencja obowiązuje od momentu przekazania Oprogramowania Licencjobiorcy.
+2. Wszelkie zmiany i uzupełnienia wymagają formy pisemnej pod rygorem nieważności.
+3. W sprawach nieuregulowanych zastosowanie mają przepisy Kodeksu cywilnego i ustawy o prawie autorskim.
+4. Spory wynikające z niniejszej umowy będą rozstrzygane przez sąd właściwy dla siedziby Licencjodawcy.
+
+Licencjodawca:
+Wojciech Szafirsztejn
+Copyright © 2025 Wojciech Szafirsztejn. All Rights Reserved.

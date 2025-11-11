@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import tkinter as tk
 from tkinter import ttk, messagebox
 from db_manager import DBManager
@@ -14,8 +15,14 @@ class LoginWindow(tk.Toplevel):
         self.geometry("400x500")
         self.resizable(False, False)
         
+        # Dziedzicz styl z main (dark mode)
+        self.style = ttk.Style(self)  # Lokalny, ale dziedziczy globalny
+        self.style.configure('TLabel', font=('Arial', 12))  # Większy font dla elegancji
+        self.style.configure('TButton', padding=10)  # Większe przyciski
+        
         self.center_window()
         self.create_widgets()
+
 
     def center_window(self):
         self.update_idletasks()
