@@ -15,6 +15,10 @@ from machine_dialog import MachineDialog
 from vacation_dialog import VacationDialog
 from l4_dialog import L4Dialog
 from color_editor import ColorEditor
+import json
+from pathlib import Path
+from tkinter import filedialog
+import subprocess, sys, threading, os
 
 
 class MainWindow(tk.Tk):
@@ -38,6 +42,9 @@ class MainWindow(tk.Tk):
         self.all_employees_data = []
         self.filtered_data = []
         self.current_filters = {}
+                # załaduj konfigurację aplikacji
+        self._app_config = self.load_app_config()
+
 
         # Kontrola inicjalizacji i login window
         self._app_initialized = False
@@ -55,6 +62,24 @@ class MainWindow(tk.Tk):
         self.setup_light_theme()
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.create_login_screen()
+    def open_magtank(self):
+        mag_path = self._app_config.get("magtank_path", "")
+        if not mag_path:
+            self.show_magazyn_settings_dialog()
+            return
+
+        if not Path(mag_path).exists():
+            messagebox.showerror("Błąd", f"Plik nie istnieje:\n{mag_path}")
+            return
+
+        try:
+            subprocess.Popen(
+                ["cmd", "/c", "start", "", mag_path],
+                cwd=Path(mag_path).parent
+            )
+        except Exception as e:
+            messagebox.showerror("Błąd uruchamiania Magazynu", str(e))
+
 
     # ---------------- MOTYWY ----------------
     def setup_light_theme(self):
@@ -68,14 +93,144 @@ class MainWindow(tk.Tk):
 
         self.configure(bg=self.bg_color)
         self.style.configure('.', background=self.bg_color, foreground=self.fg_color)
+
+        # ✅ Ustawienia czcionek
+        default_font = ('Segoe UI', 10)
+        heading_font = ('Segoe UI', 10, 'bold')
+        small_font = ('Segoe UI', 8)
+
+        self.option_add("*TLabel.Font", default_font)
+        self.option_add("*TButton.Font", default_font)
+        self.option_add("*Treeview.Font", default_font)
+        self.option_add("*Treeview.Heading.Font", heading_font)
+        self.option_add("*Entry.Font", default_font)
+        self.option_add("*TCombobox.Font", default_font)
+        self.option_add("*Label.Font", default_font)
+        self.option_add("*Button.Font", default_font)
+
+        # ✅ Styl elementów
         self.style.configure('TFrame', background=self.bg_color)
         self.style.configure('TLabel', background=self.bg_color, foreground=self.fg_color)
         self.style.configure('TLabelFrame', background=self.bg_color)
         self.style.configure('TButton', background='#f0f0f0', foreground=self.fg_color)
         self.style.configure('Accent.TButton', background=self.accent_color, foreground='white')
-        self.style.configure('Small.TButton', font=('Arial', 8))
+        self.style.configure('Small.TButton', font=small_font)
         self.style.configure('Treeview', background='white', foreground='black', fieldbackground='white')
         self.style.configure('Treeview.Heading', background='#e0e0e0', foreground='black')
+        # ---- Ścieżka do pliku konfiguracyjnego obok main_window.py ----
+    def _config_path(self):
+        try:
+            base = Path(__file__).resolve().parent
+        except Exception:
+            base = Path(".").resolve()
+        return base / "app_config.json"
+
+    def load_app_config(self):
+        p = self._config_path()
+        if not p.exists():
+            cfg = {"magtank_path": ""}
+            try:
+                p.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+            except Exception:
+                pass
+            return cfg
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            return {"magtank_path": ""}
+
+    def save_app_config(self, cfg):
+        p = self._config_path()
+        try:
+            p.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+            return True
+        except Exception as e:
+            messagebox.showerror("Błąd zapisu konfiguracji", str(e))
+            return False
+
+    # ---- Otwieranie programu magazynowego (w osobnym procesie) ----
+    def open_magtank(self):
+        mag_path = (self._app_config.get("magtank_path", "") if hasattr(self, "_app_config") else "")
+        if not mag_path:
+            # jeśli nie ustawiony — otwórz ustawienia, by użytkownik podał ścieżkę
+            self.show_magazyn_settings_dialog()
+            return
+
+        if not Path(mag_path).exists():
+            messagebox.showerror("Nie znaleziono pliku", f"Nie znaleziono pliku:\n{mag_path}")
+            return
+
+        def _run():
+            try:
+                if str(mag_path).lower().endswith(".py"):
+                    subprocess.Popen([sys.executable, mag_path])
+                else:
+                    # .exe lub inny binarny plik
+                    subprocess.Popen([mag_path])
+            except Exception as e:
+                # Wywołanie w wątku — komunikat w głównym wątku
+                self.after(0, lambda: messagebox.showerror("Błąd uruchomienia Magazynu", str(e)))
+
+        threading.Thread(target=_run, daemon=True).start()
+
+    # ---- Dialog ustawień magazynu ----
+    def show_magazyn_settings_dialog(self):
+        dialog = tk.Toplevel(self)
+        dialog.title("Ustawienia — Magazyn")
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.geometry("660x160")
+        dialog.resizable(False, False)
+
+        frame = ttk.Frame(dialog, padding=12)
+        frame.pack(fill='both', expand=True)
+
+        ttk.Label(frame, text="Ścieżka do programu magazynowego (.exe lub .py):", font=('Arial', 10)).grid(row=0, column=0, sticky='w', pady=(4,8))
+        path_var = tk.StringVar(value=self._app_config.get("magtank_path", ""))
+
+        entry = ttk.Entry(frame, textvariable=path_var, width=72)
+        entry.grid(row=1, column=0, columnspan=2, sticky='w', padx=(0,4))
+
+        def browse():
+            p = filedialog.askopenfilename(
+                title="Wybierz program magazynowy",
+                filetypes=[("Executables / Python", "*.exe *.py"), ("Wszystkie pliki","*.*")]
+            )
+            if p:
+                path_var.set(p)
+
+        ttk.Button(frame, text="Wybierz plik...", command=browse).grid(row=1, column=2, padx=(6,0))
+
+        status_label = ttk.Label(frame, text="", font=('Arial', 9), foreground='gray')
+        status_label.grid(row=2, column=0, columnspan=3, sticky='w', pady=(8,0))
+
+        def save_and_close():
+            newp = path_var.get().strip()
+            cfg = (self._app_config or {})
+            cfg["magtank_path"] = newp
+            ok = self.save_app_config(cfg)
+            if ok:
+                self._app_config = cfg
+                status_label.config(text="Zapisano konfigurację.")
+                # odśwież stan przycisku Magazyn w UI
+                try:
+                    self.update_mag_button_state()
+                except Exception:
+                    pass
+                dialog.after(600, dialog.destroy)
+
+        btn_frame = ttk.Frame(frame)
+        btn_frame.grid(row=3, column=0, columnspan=3, sticky='e', pady=(12,0))
+        ttk.Button(btn_frame, text="Zapisz", command=save_and_close).pack(side='right', padx=(6,0))
+        ttk.Button(btn_frame, text="Anuluj", command=dialog.destroy).pack(side='right')
+
+        dialog.update_idletasks()
+        x = (self.winfo_screenwidth() // 2) - (dialog.winfo_width() // 2)
+        y = (self.winfo_screenheight() // 2) - (dialog.winfo_height() // 2)
+        dialog.geometry(f"+{x}+{y}")
+
+
+
 
     def setup_dark_theme(self):
         self.current_theme = 'dark'
@@ -216,6 +371,12 @@ class MainWindow(tk.Tk):
                 self.notebook.destroy()
         except Exception:
             pass
+                # po zbudowaniu toolbar/okienka
+        try:
+            self.update_mag_button_state()
+        except Exception:
+            pass
+
 
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(fill="both", expand=True, padx=10, pady=10)
@@ -555,16 +716,20 @@ class MainWindow(tk.Tk):
         group_menu.menu.add_command(label="🗑️ Usuń Zaznaczonych", command=self.bulk_delete_employees)
 
         ttk.Button(actions_frame, text="📊 Podsumowanie",
-                   command=self.show_summary, width=15).pack(side='left', padx=2)
+                   command=self.show_summary, width=18).pack(side='left', padx=2)
         ttk.Button(actions_frame, text="📋 Historia",
                    command=self.show_history, width=12).pack(side='left', padx=2)
 
         # Przełącznik bocznego podglądu historii
         ttk.Button(actions_frame, text="🕘 Podgląd historii",
-                   command=self.toggle_side_history, width=16).pack(side='left', padx=2)
+                   command=self.toggle_side_history, width=18).pack(side='left', padx=2)
 
         ttk.Button(actions_frame, text="🎨 Kolory",
                    command=self.show_color_editor, width=12).pack(side='left', padx=2)
+                # Magazyn — przycisk, który uruchamia program jeśli ustawiony, inaczej otwiera ustawienia
+        self.mag_button = ttk.Button(actions_frame, text="📦 Magazyn", command=self.open_magtank, width=12)
+        self.mag_button.pack(side='left', padx=2)
+
 
         user_frame = ttk.Frame(toolbar)
         user_frame.pack(side='right', fill='x', padx=5, pady=5)
@@ -584,6 +749,20 @@ class MainWindow(tk.Tk):
                    command=self.show_settings).pack(side='left', padx=2)
         ttk.Button(user_frame, text="🚪", width=3,
                    command=self.logout).pack(side='left', padx=2)
+    def update_mag_button_state(self):
+        """Ustaw stan i tooltip/przyciski zależnie od tego czy ścieżka do magazynu jest ustawiona."""
+        mag_path = (self._app_config.get("magtank_path", "") if hasattr(self, "_app_config") else "")
+        if mag_path and Path(mag_path).exists():
+            try:
+                self.mag_button.state(["!disabled"])
+            except Exception:
+                self.mag_button.config(state="normal")
+        else:
+            try:
+                self.mag_button.state(["disabled"])
+            except Exception:
+                self.mag_button.config(state="disabled")
+
 
     def create_filter_section(self, parent):
         filter_frame = ttk.LabelFrame(parent, text="🔍 Filtrowanie", padding="8")

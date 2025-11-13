@@ -11,10 +11,10 @@ class SummaryWindow(tk.Toplevel):
         self.emp_manager = emp_manager
         self.title("📊 Podsumowanie Kadrowe")
         
+        self.resizable(True, True)
         # Ustawienia dla drugiego monitora
         self.attributes('-topmost', False)  # Nie zawsze na wierzchu
-        self.transient(master)
-        
+        # self.transient(master)  # wyłączone, by mieć min/max
         # Umożliwia niezależną pracę na drugim monitorze
         self.grab_release()
         

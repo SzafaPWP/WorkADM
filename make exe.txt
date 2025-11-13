@@ -1,0 +1,12 @@
+pyinstaller --onedir --console --clean --name WorkADM --icon "WorkADM.ico" workadm_launcher.py
+
+jedno plikowy
+pyinstaller --onefile --noconsole --clean --noupx --name WorkADM --icon "WorkADM.ico" workadm_launcher.py
+
+🔥 A jeśli kiedyś zmienisz folder programu?
+
+Wystarczy, że:
+
+👉 w workadm_launcher.py zmienisz linię: 
+prog_dir = Path(r"C:\Users\SZAFA\Desktop\WorkADM\nowyprojekt\testowy")
+

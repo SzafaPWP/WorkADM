@@ -68,14 +68,32 @@ class MainWindow(tk.Tk):
 
         self.configure(bg=self.bg_color)
         self.style.configure('.', background=self.bg_color, foreground=self.fg_color)
+
+        # ✅ Ustawienia czcionek
+        default_font = ('Segoe UI', 10)
+        heading_font = ('Segoe UI', 10, 'bold')
+        small_font = ('Segoe UI', 8)
+
+        self.option_add("*TLabel.Font", default_font)
+        self.option_add("*TButton.Font", default_font)
+        self.option_add("*Treeview.Font", default_font)
+        self.option_add("*Treeview.Heading.Font", heading_font)
+        self.option_add("*Entry.Font", default_font)
+        self.option_add("*TCombobox.Font", default_font)
+        self.option_add("*Label.Font", default_font)
+        self.option_add("*Button.Font", default_font)
+
+        # ✅ Styl elementów
         self.style.configure('TFrame', background=self.bg_color)
         self.style.configure('TLabel', background=self.bg_color, foreground=self.fg_color)
         self.style.configure('TLabelFrame', background=self.bg_color)
         self.style.configure('TButton', background='#f0f0f0', foreground=self.fg_color)
         self.style.configure('Accent.TButton', background=self.accent_color, foreground='white')
-        self.style.configure('Small.TButton', font=('Arial', 8))
+        self.style.configure('Small.TButton', font=small_font)
         self.style.configure('Treeview', background='white', foreground='black', fieldbackground='white')
         self.style.configure('Treeview.Heading', background='#e0e0e0', foreground='black')
+
+
 
     def setup_dark_theme(self):
         self.current_theme = 'dark'
@@ -555,13 +573,13 @@ class MainWindow(tk.Tk):
         group_menu.menu.add_command(label="🗑️ Usuń Zaznaczonych", command=self.bulk_delete_employees)
 
         ttk.Button(actions_frame, text="📊 Podsumowanie",
-                   command=self.show_summary, width=15).pack(side='left', padx=2)
+                   command=self.show_summary, width=18).pack(side='left', padx=2)
         ttk.Button(actions_frame, text="📋 Historia",
                    command=self.show_history, width=12).pack(side='left', padx=2)
 
         # Przełącznik bocznego podglądu historii
         ttk.Button(actions_frame, text="🕘 Podgląd historii",
-                   command=self.toggle_side_history, width=16).pack(side='left', padx=2)
+                   command=self.toggle_side_history, width=18).pack(side='left', padx=2)
 
         ttk.Button(actions_frame, text="🎨 Kolory",
                    command=self.show_color_editor, width=12).pack(side='left', padx=2)

@@ -13,8 +13,8 @@ class VacationDialog(tk.Toplevel):
         self.emp_name = emp_name
         
         self.title(f"Planowanie urlopu - {emp_name}")
-        self.geometry("500x600")  # ZWIĘKSZONE WYSOKOŚĆ
-        self.minsize(500, 600)   # MINIMALNY ROZMIAR
+        self.geometry("500x800")  # ZWIĘKSZONE WYSOKOŚĆ
+        self.minsize(500, 700)   # MINIMALNY ROZMIAR
         self.transient(master)
         self.grab_set()
         self.resizable(True, True)  # POZWÓL NA ZMIANĘ ROZMIARU
